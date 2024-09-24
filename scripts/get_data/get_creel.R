@@ -16,7 +16,6 @@ namesFix<-gsub(" ", "_", namesFix)
 namesFix<-gsub("#", "No", namesFix)
 namesFix<-remove_special_chars(namesFix)
 names(main_page)<-namesFix
-names(main_page)
 
 questionsAsked<-names(main_page)
 
@@ -28,11 +27,11 @@ main_page <- main_page |>
          Wind = as.character(Wind), Precip = as.character(Precip), No_Anglers = as.numeric(No_Anglers),
          No_Rods = as.numeric(No_Rods), Total_Person_Hr_Fished = as.numeric(Total_Person_Hr_Fished), 
          Total_Fish_Caught = as.numeric(Total_Fish_Caught), No_pikeminnow_caught = as.numeric(No_pikeminnow_caught),
-         No_KO_c, as.numeric(No_KO_c), No_CT_c = as.numeric(No_CT_c), No_RB_c = as.numeric(No_RB_c),
-         No_BT_c, as.numeric(No_BT_c), No_LT_c = as.numeric(No_LT_c), No_Other_Spp_c = as.character(No_Other_Spp_c),
+         No_KO_c = as.numeric(No_KO_c), No_CT_c = as.numeric(No_CT_c), No_RB_c = as.numeric(No_RB_c),
+         No_BT_c = as.numeric(No_BT_c), No_LT_c = as.numeric(No_LT_c), No_Other_Spp_c = as.character(No_Other_Spp_c),
          Total_Retained = as.numeric(Total_Retained), No_pikeminnow_r = as.numeric(No_pikeminnow_r),
-         No_KO_r, as.numeric(No_KO_r), No_CT_r = as.numeric(No_CT_r), No_RB_r = as.numeric(No_RB_r),
-         No_BT_r, as.numeric(No_BT_r), No_LT_r = as.numeric(No_LT_r), No_Other_Spp_r = as.character(No_Other_Spp_r),
+         No_KO_r = as.numeric(No_KO_r), No_CT_r = as.numeric(No_CT_r), No_RB_r = as.numeric(No_RB_r),
+         No_BT_r = as.numeric(No_BT_r), No_LT_r = as.numeric(No_LT_r), No_Other_Spp_r = as.character(No_Other_Spp_r),
          Release_Reason = as.character(Release_Reason), Vessel = as.character(Vessel), 
          Preferred_Catch_Spp = as.character(Preferred_Catch_Spp), Why = as.character(Why), 
          Why_this_Location = as.character(Why_this_Location), How_satisfied_were_you_with_your_fishing_experience_today = 
@@ -49,11 +48,17 @@ fish_edit<-read_excel(path = paste0(lan_folder,"2023 projects/creel survey/2023 
                       sheet = 2, col_names = T, progress = readxl_progress())
 fish_edit<-names_fix(fish_edit)
 names(fish_edit)[names(fish_edit) == "Date__Time"]<-"Date_Time"
+names(fish_edit)[names(fish_edit) == "...8"]<-"Weather"
+
+
 
 fish_edit <- fish_edit |> 
   mutate(Survey_No = as.numeric(Survey_No), Date_Time = as.POSIXct(Date_Time),
          Fish_No = as.numeric(Fish_No), Spp = as.character(Spp), Length_mm = as.numeric(Length_mm),
          Weight_g = as.numeric(Weight_g), PIT_tag_No = as.numeric(PIT_tag_No), Notes = as.character(Notes))
+
+
+
 
 demography_edit<-fish_edit<-read_excel(path = paste0(lan_folder,"2023 projects/creel survey/2023 SMB creel_final working.xlsx"),
                                  sheet = 3, col_names = T, progress = readxl_progress())
@@ -76,3 +81,4 @@ ICE <- ICE |>
          No_boat_anglers = as.numeric(No_boat_anglers), No_shore_anglers = as.numeric(No_shore_anglers),
          No_dock_anglers = as.numeric(No_dock_anglers), Comments = as.character(Comments), 
          Weather = as.character(Weather))
+
