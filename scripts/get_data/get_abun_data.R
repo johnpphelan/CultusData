@@ -17,23 +17,14 @@ lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/Ge
 #abun_names<-list.files(path = paste0(lan_folder,"2023 projects/abundance estimate"), pattern = ".xlsx", full.names = T)
 #abun_data23<-rbindlist(lapply(tag_names, read_excel), fill = T)
 
-capture_raw_init<-read_excel(path = paste0(lan_folder,"2023 projects/abundance estimate/2023 SMB abundance estimate.xlsx"),
+capture_raw<-read_excel(path = paste0(lan_folder,"2023 projects/abundance estimate/2023 SMB abundance estimate.xlsx"),
                                             sheet = 1, col_names = T, progress = readxl_progress())
 
-capture_raw<-capture_raw_init
 namesFix<-names(capture_raw)
 namesFix<-gsub(" ", "_", namesFix)
 namesFix<-gsub("#", "No", namesFix)
 namesFix<-remove_special_chars(namesFix)
 names(capture_raw)<-namesFix
-names(capture_raw)
-
-
-
-unique(capture_raw$Seconds_Electricity)
-
-
-capture_raw$Pit_tag<-as.numeric(capture_raw$Pit_tag)
 
 
 ## recap - split these? remove them from the excel and have them as a separate table probably
@@ -50,9 +41,6 @@ capture_raw <- capture_raw %>%
   ) |> 
   filter(!is.na(date))
 
-head(capture_raw)
-rm(capture_raw_init)
-str(capture_raw)
 
 
 recapture_raw<-read_excel(path = paste0(lan_folder,"2023 projects/abundance estimate/2023 SMB abundance estimate.xlsx"),
@@ -79,7 +67,7 @@ namesFix<-gsub(" ", "_", namesFix)
 namesFix<-gsub("#", "No", namesFix)
 namesFix<-remove_special_chars(namesFix)
 names(capture_mark)<-namesFix
-names(capture_mark)
+
 capture_mark <- capture_mark |> 
   mutate(date = as.Date(date), Pit_tag = as.numeric(Pit_tag), length = as.numeric(length),
          weight = as.numeric(weight), sex = as.character(sex), Maturity = as.character(Maturity),
@@ -89,7 +77,7 @@ capture_mark <- capture_mark |>
 
 recapture_wrk<-read_excel(path = paste0(lan_folder,"2023 projects/abundance estimate/2023 SMB abundance estimate.xlsx"),
                          sheet = 4, col_names = T, progress = readxl_progress())
-recapture_wrk
+
 
 names(recapture_wrk)[names(recapture_wrk) == "...5"]<-"comment"
 
