@@ -2,13 +2,14 @@ library(sqldf)
 library(dplyr)
 source("scripts/get_data/get_creel.R")
 source("scripts/utils/col_types_f.R")
+source("scripts/utils/fix_col_names_f.R")
 names(fish_edit)[names(fish_edit) == "...8"]<-"Weather"
 
 
 
 db_filepath = "output/CultusData.sqlite"
 
-con<-dbConnect(RSQLite::SQLite(), db_filepath)
+con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
 survDT<- main_page |> 
   select(Survey_No, Date, Time, Surveyor, Shift) |> 
@@ -26,7 +27,7 @@ sur_col_types_sql <- sur_col_types |>
     col_name %in% c("date") ~ "KEY",
     TRUE ~ ""
   )) |> 
-  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(type), " ", key_status))
+  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
 
 
 
@@ -70,7 +71,7 @@ sur_col_types_sql <- col_types |>
     col_name %in% c("anglerID","surveyNumber", "time", "date") ~ "KEY",
     TRUE ~ ""
   )) |> 
-  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(type), " ", key_status))
+  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
 
 sur_col_types_sql
 
@@ -118,7 +119,7 @@ sur_col_types_sql <- sur_col_types |>
     col_name %in% c("surveyNumber, time")  ~ "KEY",
     TRUE ~ ""
   )) |> 
-  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(type), " ", key_status))
+  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
 
 
 
@@ -175,7 +176,6 @@ sql = paste0("CREATE TABLE IF NOT EXISTS fishingDetails (
        ",paste0(sur_col_types_sql$a,collapse = ",\n"),
              ",\nPRIMARY KEY (surveyNumber, time),
               \nFOREIGN KEY (surveyNumber, time) REFERENCES fishCatch (surveyNumber, time),
-              \nFOREIGN KEY (surveyNumber, time) REFERENCES catchData (surveyNumber, time),
               \nFOREIGN KEY (surveyNumber, time) REFERENCES anglerInfo (surveyNumber, time)
               )")
 dbExecute(con, sql)
@@ -272,13 +272,17 @@ sur_col_types_sql <- col_types |>
 sql = paste0("CREATE TABLE IF NOT EXISTS surveyQuestions (
        ",paste0(sur_col_types_sql$a,collapse = ",\n"),
              ",\nPRIMARY KEY (questionID),
-              \nFOREIGN KEY (questionID) REFERENCES surveyAnswers (questionID))")
+              \nFOREIGN KEY (questionID) REFERENCES surveyAnswers (question))")
 
 dbExecute(con, sql)
 dbWriteTable(conn = con, "surveyQuestions", questionTables, row.names = F, append = T)
 
-
-
+query <- "SELECT * FROM surveyQuestions"
+#querydelete<-"DROP TABLE surveyData"
+result <- dbSendQuery(conn = con, query)
+df<-fetch(result, -1)
+df
+dbClearResult(result)
 #######################################################################################################
 
 dbDisconnect(con)
