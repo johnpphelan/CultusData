@@ -1,15 +1,10 @@
 library(data.table)
+library(lubridate)
 library(readxl)
 library(dplyr)
 library(stringr)
+source("scripts/utils/remove_special_chars_f.R")
 
-remove_special_chars <- function(string) {
-  # Regular expression to match all special characters except underscores
-  pattern <- "[^\\w_]"
-  
-  # Replace matched characters with an empty string
-  str_replace_all(string, pattern, "")
-}
 
 lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/"
 
@@ -41,6 +36,12 @@ capture_raw <- capture_raw %>%
   ) |> 
   filter(!is.na(date))
 
+capture_raw<- capture_raw |> 
+  mutate(st_tm = hm(Start_Time),
+         nd_tm = hm(End_Time)) |> 
+  select(-Start_Time, - End_Time) |> 
+  rename(Start_time = st_tm, End_Time = nd_tm)
+
 
 
 recapture_raw<-read_excel(path = paste0(lan_folder,"2023 projects/abundance estimate/2023 SMB abundance estimate.xlsx"),
@@ -52,13 +53,32 @@ namesFix<-gsub("#", "No", namesFix)
 namesFix<-remove_special_chars(namesFix)
 names(recapture_raw)<-namesFix
 names(recapture_raw)
+
 recapture_raw <- recapture_raw |> 
   mutate(
     date = as.Date(date), location = as.character(location), Acoustic_Tag_No = as.numeric(Acoustic_Tag_No),
     PIT_Tag_No = as.numeric(PIT_Tag_No), Length_mm = as.numeric(Length_mm),
-    Weight_g = as.numeric(Weight_g), comments = as.character(comments)
+    Weight_g = as.numeric(Weight_g), comments = as.character(comments),
+    start_time=as.numeric(start_time), end_time=as.numeric(end_time)
   ) |> 
   filter(!is.na(date))  # Filter for non-NA dates within mutate chain
+
+recapture_raw <- recapture_raw |> 
+  mutate(date_start_time = (start_time*24*3600),
+         date_end_time = (end_time*24*3600),
+         date = as.POSIXlt(date),
+         date_st_tm = as.POSIXlt(  date + date_start_time),
+         date_end_tm = as.POSIXlt(  date + date_end_time)) |> 
+  select(-start_time, -end_time) |> 
+  mutate(start_time = format(as.POSIXct(date_st_tm, format = "%H:%M"), format = "%H:%M"),
+         end_time = format(as.POSIXct(date_end_tm, format = "%H:%M"), format = "%H:%M")) |>
+  select(-date_st_tm, -date_end_tm, -date_start_time, -date_end_time) 
+  
+# |> 
+#   select(-start_time, - end_time) |> 
+#   rename(Start_Time = st_tm, End_Time = nd_tm)
+
+
 
 capture_mark<-read_excel(path = paste0(lan_folder,"2023 projects/abundance estimate/2023 SMB abundance estimate.xlsx"),
                           sheet = 3, col_names = T, progress = readxl_progress())
@@ -74,6 +94,7 @@ capture_mark <- capture_mark |>
          method = as.character(Method), Recap = as.character(Recap), Mort = as.character(Mort)
          ) |> 
   filter(!is.na(date))
+
 
 recapture_wrk<-read_excel(path = paste0(lan_folder,"2023 projects/abundance estimate/2023 SMB abundance estimate.xlsx"),
                          sheet = 4, col_names = T, progress = readxl_progress())
