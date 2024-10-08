@@ -60,7 +60,7 @@ fish_edit <- fish_edit |>
 
 
 
-demography_edit<-fish_edit<-read_excel(path = paste0(lan_folder,"2023 projects/creel survey/2023 SMB creel_final working.xlsx"),
+demography_edit<-read_excel(path = paste0(lan_folder,"2023 projects/creel survey/2023 SMB creel_final working.xlsx"),
                                  sheet = 3, col_names = T, progress = readxl_progress())
 demography_edit<-names_fix(demography_edit)
 names(demography_edit)[names(demography_edit) == "Date__Time"]<-"Date_Time"
@@ -71,7 +71,7 @@ demography_edit <- demography_edit |>
          Residency = as.character(Residency), City_Prov_Country = as.character(City_Prov_Country),
          Postal_Code_first_3 = as.character(Postal_Code_first_3), Notes = as.character(Notes))
 
-ICE<-fish_edit<-read_excel(path = paste0(lan_folder,"2023 projects/creel survey/2023 SMB creel_final working.xlsx"),
+ICE<-read_excel(path = paste0(lan_folder,"2023 projects/creel survey/2023 SMB creel_final working.xlsx"),
                                        sheet = 4, col_names = T, progress = readxl_progress())
 ICE<-names_fix(ICE)
 names(ICE)[names(ICE) == "8"]<-"Weather"
