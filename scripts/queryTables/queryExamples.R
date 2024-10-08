@@ -18,7 +18,7 @@ result <- dbSendQuery(con, query)
 column_names <- fetch(result, n = -1)
 column_names
 
-query <- "PRAGMA table_info(anglerInfo);"
+query <- "PRAGMA table_info(iceData);"
 result <- dbSendQuery(con, query)
 column_names <- fetch(result, n = -1)
 column_names
@@ -26,12 +26,13 @@ dbClearResult(result)
 
 
 
-query <- "SELECT * FROM surveyData"
+query <- "SELECT * FROM iceData"
 dbExecute(con = con, query)
 #querydelete<-"DROP TABLE surveyData"
 result <- dbSendQuery(conn = con, query)
 df<-fetch(result, -1)
 df
+dbClearResult(result)
 
 query<-"SELECT DISTINCT ageClass FROM anglerInfo"
 result<-dbSendQuery(con, query)
