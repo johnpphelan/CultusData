@@ -1,6 +1,15 @@
+library(data.table)
+library(dplyr)
+library(stringr)
+library(reshape2)
+source("scripts/utils/fix_col_names_f.R")
+source("scripts/utils/col_types_f.R")
 
+db_filepath = "output/CultusData.sqlite"
 
-droptable<-"DROP TABLE IF EXISTS fishCaught"
+con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
+
+droptable<-"DROP TABLE IF EXISTS creelTables"
 dbExecute(con, droptable)
 
 
