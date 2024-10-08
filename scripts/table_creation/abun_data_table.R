@@ -16,7 +16,7 @@ names(captureTable)<-remove_special_chars(names(captureTable))
 names(captureTable)<-gsub("_","",names(captureTable)) 
 
 captureTable<- captureTable |> 
-  mutate(captureID = row_number()) 
+  mutate(captureID = row_number(), date = as.character(date))
 
 col_types<-get_col_types(captureTable)
 
@@ -26,7 +26,7 @@ sur_col_types_sql <- col_types |>
     col_name %in% c("captureID", "date", "GPSPoint", "Pittag", "AcousticTag", "ScaleBookNo", "ScaleNos") ~ "KEY",
     TRUE ~ ""
   )) |> 
-  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(type), " ", key_status))
+  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
 
 sql = paste0("CREATE TABLE IF NOT EXISTS abundanceCapture (
        ",paste0(sur_col_types_sql$a,collapse = ",\n"),
@@ -45,8 +45,9 @@ names(recapTable)<-gsub("_", "",names(recapTable))
 names(recapTable)
 
 recapTable<-recapTable |> 
-  mutate(recapID = row_number()) |> 
-  mutate(date = as.Date(date))
+  mutate(recapID = row_number(), date = as.character(date)) |> 
+  rename(length = Lengthmm, weight = Weightg, startTime = starttime,
+         endTime = endtime, pitTagNo = PITTagNo)
 
 col_types<-get_col_types(recapTable)
 
@@ -55,7 +56,7 @@ sur_col_types_sql <- col_types |>
     col_name %in% c("recapID") ~ "KEY",
     TRUE ~ ""
   )) |> 
-  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(type), " ", key_status))
+  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
 
 sql = paste0("CREATE TABLE IF NOT EXISTS recapture (
        ",paste0(sur_col_types_sql$a,collapse = ",\n"),
@@ -70,6 +71,6 @@ dbExecute(con = con, query)
 result <- dbSendQuery(conn = con, query)
 df<-fetch(result, -1)
 df
-
+dbClearResult(result)
 dbDisconnect(con)
 
