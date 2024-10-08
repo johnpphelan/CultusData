@@ -1,6 +1,8 @@
 library(sqldf)
 library(dplyr)
 library(tidyr)
+library(openxlsx)
+library(lubridate)
 source("scripts/get_data/get_scale_data.R")
 source("scripts/utils/col_types_f.R")
 source("scripts/utils/fix_col_names_f.R")
@@ -18,6 +20,7 @@ scaleDataRaw <- scaleDataRaw |>
                values_to = "result")
 
 scaleNames<-unique(scaleDataRaw$AgeType)
+
 scaleNames<- scaleNames |> 
   data.frame() |> 
   mutate(keyID = paste0(LETTERS[row_number()], row_number())) |> 
@@ -31,6 +34,17 @@ scaleDataRaw<-updated_data
 
 names(scaleDataRaw)<-gsub("_","",names(scaleDataRaw))
 
+scaleDataRaw<- scaleDataRaw |> 
+  mutate(date = dmy(date)) |> 
+  mutate(date = as.character(date),
+         startTime = as.character(startTime),
+         endTime = as.character(endTime)) |> 
+  rename(lenth = lengthmm, weight = weightg)
+  
+
+  
+
+
 col_types<-get_col_types(scaleDataRaw)
 
 
@@ -39,7 +53,7 @@ sur_col_types_sql <- col_types |>
     col_name %in% c("originalorder, AgeType") ~ "KEY",
     TRUE ~ ""
   )) |> 
-  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(type), " ", key_status))
+  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
 
 sql = paste0("CREATE TABLE IF NOT EXISTS scaleRawTable (
        ",paste0(sur_col_types_sql$a,collapse = ",\n"),
@@ -73,14 +87,20 @@ scale500<-scale_500_data |>
 
 names(scale500)<-names_fix(names(scale500))
 names(scale500)<-gsub("_","", names(scale500))
+names(scale500)<-names_fix(names(scale500))
 col_types<-get_col_types(scale500)
+
+
+scale500<- scale500 |> 
+  mutate(date = as.character(date))
+
 
 sur_col_types_sql <- col_types |> 
   dplyr::mutate(key_status = case_when(
     col_name %in% c("scaleID") ~ "KEY",
     TRUE ~ ""
   )) |> 
-  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(type), " ", key_status))
+  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
 
 sql = paste0("CREATE TABLE IF NOT EXISTS scale500 (
        ",paste0(sur_col_types_sql$a,collapse = ",\n"),
@@ -90,3 +110,5 @@ dbWriteTable(conn = con, "scale500", scale500, row.names = F, append = T)
 dbListTables(con)
 
 #######################################################################################################
+
+dbDisconnect(con)

@@ -3,7 +3,6 @@ library(dplyr)
 source("scripts/get_data/get_angling_derby.R")
 source("scripts/utils/col_types_f.R")
 
-angling_derby_data
 
 db_filepath = "output/CultusData.sqlite"
 
@@ -15,7 +14,12 @@ angling_derby_data<- angling_derby_data  |>
          end_time = as.character(end_time)) |> 
   mutate(anglingID = row_number())
 
+
 names(angling_derby_data) <- gsub("_", "", names(angling_derby_data))
+
+angling_derby_data <- angling_derby_data |> 
+  rename(startTime = starttime, endTime = endtime, acousticTagNo = AcousticTagNo, 
+         pitTagNo = PITTagNo, length = Lengthmm, weight = Weightg)
 
 sur_col_types <- get_col_types(angling_derby_data)
 
@@ -42,3 +46,4 @@ result <- dbSendQuery(conn = con, query)
 df<-fetch(result, -1)
 df
 dbClearResult(result)
+dbDisconnect(con)

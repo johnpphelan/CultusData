@@ -12,7 +12,6 @@ names(nestRaw)<-names_fix(names(nestRaw))
 names(nestRaw)<-remove_special_chars(names(nestRaw))
 names(nestRaw)<-gsub("_", "",names(nestRaw))
 
-str(nestRaw)
 
 
 db_filepath = "output/CultusData.sqlite"
@@ -21,6 +20,13 @@ con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
 nestRaw <- nestRaw |> 
   mutate(nestID = row_number())
+
+nestRaw <- nestRaw |> 
+  mutate(Date = as.character(Date)) |> 
+    rename(date = Date, depth = Depthofnestm, diameter = Approximatediameterofnestm,
+         guarding = PresenceofguardingmaleYN, lifeStage = LifestageonnestEggalevinorfry,
+         adjacentStructure = AdjacentstructureegdockormouringbuoyNA, activityCompleted = Activitycompletedobservationvsnestdestruction,
+         nestDestroyed = NestfullydestroyedYNPartially, comments = Comments)
 
 col_types<-get_col_types(nestRaw)
 
@@ -38,3 +44,4 @@ sql = paste0("CREATE TABLE IF NOT EXISTS nestRaw (
 dbExecute(con, sql)
 dbWriteTable(conn = con, "nestRaw", nestRaw, row.names = F, append = T)
 dbListTables(con)
+dbDisconnect(con)

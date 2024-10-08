@@ -13,8 +13,11 @@ names_fix(names(tag_data23))
 names(tag_data23)<-remove_special_chars(names(tag_data23))
 
 tag_data23 <- tag_data23 |> 
-  rename(date = DateUTC, time = TimeUTC) |> 
-  mutate(tagIDEvent = row_number())
+  mutate(tagIDEvent = row_number()) |> 
+  rename(date = DateUTC, time = TimeUTC, dateLocal = DateLocal, timeLocal = TimeLocal, receiver = Receiver, transmitter = Transmitter, 
+         transmitterName = TransmitterName, transmitterSerial = TransmitterSerial, sensorValue = SensorValue,
+         sensorUnit = SensorUnit, stationName = StationName, latitude = Latitude, longitude = Longitude, 
+         transmitterType = TransmitterType, sensorPrecision = SensorPrecision)
 
 sur_col_types <- get_col_types(tag_data23)
 
@@ -39,4 +42,4 @@ DBI::dbListTables(con)
 dbWriteTable(conn = con, "tagData", tag_data23, row.names = F, append = T)
 
 
-
+dbDisconnect(con)

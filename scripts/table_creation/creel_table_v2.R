@@ -191,7 +191,8 @@ dbClearResult(result)
 weatherTable<-main_page |> 
   select(Survey_No, Time, Site, Mean_Air_Temperature, Cloud_Cover, Wind, Precip) |> 
   rename(surveyNumber = Survey_No, time = Time, site = Site, meanAirTemp= Mean_Air_Temperature,
-         cloudCover = Cloud_Cover, wind = Wind, precip = Precip)
+         cloudCover = Cloud_Cover, wind = Wind, precip = Precip) |> 
+  mutate(time = as.character(time)) 
 
 col_types<-get_col_types(weatherTable)
 
@@ -201,7 +202,7 @@ sur_col_types_sql <- col_types |>
     col_name %in% c("surveyNumber", "time", "site") ~ "KEY",
     TRUE ~ ""
   )) |> 
-  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(type), " ", key_status))
+  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
 
 
 sql = paste0("CREATE TABLE IF NOT EXISTS weatherDetails (
@@ -231,7 +232,8 @@ answersLong <- answersTable %>%
   left_join(questionTables, by = c("Question" = "question")) |> 
   mutate(Question = questionID) |> 
   select(-questionID) |> 
-  rename( surveyNumber = Survey_No, time = Time, question = Question, answer = Answer)
+  rename( surveyNumber = Survey_No, time = Time, question = Question, answer = Answer) |> 
+  mutate(time = as.character(time))
 
 
 col_types<-get_col_types(answersLong)
@@ -284,5 +286,89 @@ df<-fetch(result, -1)
 df
 dbClearResult(result)
 #######################################################################################################
+
+  
+names(ICE)<-names_fix(names(ICE))
+names(ICE)<-gsub("_", "", names(ICE))
+ICE<-ICE |> 
+  rename(date = Date, time = Time, noAnglingBoats = Noanglingboats, noBoatAnglers = Noboatanglers,
+         noShoreAnglers = Noshoreanglers, noDockAnglers = Nodockanglers, comments = Comments,
+         weather = Weather) |> 
+  mutate(date = as.character(date), time = as.character(time)) |> 
+  mutate(iceID = row_number())
+
+sur_col_types <- get_col_types(ICE)
+
+sur_col_types
+
+
+sur_col_types_sql <- sur_col_types |> 
+  dplyr::mutate(key_status = case_when(
+    col_name %in% c("iceID")  ~ "KEY",
+    TRUE ~ ""
+  )) |> 
+  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
+
+
+
+sql = paste0("CREATE TABLE IF NOT EXISTS iceData (
+       ",paste0(sur_col_types_sql$a,collapse = ",\n"),
+             ",\nPRIMARY KEY ( \niceID\n))")
+
+
+dbExecute(con, sql)
+DBI::dbListTables(con)
+
+dbWriteTable(conn = con, "iceData", ICE, row.names = F, append = T)
+
+query <- "SELECT * FROM iceData"
+dbExecute(con = con, query)
+#querydelete<-"DROP TABLE surveyData"
+result <- dbSendQuery(conn = con, query)
+df<-fetch(result, -1)
+df
+dbClearResult(result)
+
+#############################################################################################
+
+fishcaught<- fish_edit |> 
+  rename(surveyNumber = Survey_No, time = Date_Time, fishNo = Fish_No, length = Length_mm, weight = Weight_g, 
+         pitTagNo = PIT_tag_No, notes = Notes) |> 
+  mutate(date = format(as.Date(time), "%Y-%m-%d")) |> 
+  mutate(date = as.character(date), time = as.character(time),
+         fishID = row_number())
+
+sur_col_types <- get_col_types(fishcaught)
+
+sur_col_types
+
+
+sur_col_types_sql <- sur_col_types |> 
+  dplyr::mutate(key_status = case_when(
+    col_name %in% c("surveyNo, time, fishID")  ~ "KEY",
+    TRUE ~ ""
+  )) |> 
+  dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
+
+
+
+sql = paste0("CREATE TABLE IF NOT EXISTS fishCaught (
+       ",paste0(sur_col_types_sql$a,collapse = ",\n"),
+             ",\nPRIMARY KEY ( \n fishID \n))")
+
+
+dbExecute(con, sql)
+DBI::dbListTables(con)
+
+dbWriteTable(conn = con, "fishCaught", fishcaught, row.names = F, append = T)
+
+query <- "SELECT * FROM fishCaught"
+dbExecute(con = con, query)
+result <- dbSendQuery(conn = con, query)
+df<-fetch(result, -1)
+df
+dbClearResult(result)
+
+
 
 dbDisconnect(con)

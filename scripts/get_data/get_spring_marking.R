@@ -14,8 +14,8 @@ spring_marking<-read_excel(path = paste0(lan_folder,"2023 projects/spring markin
 spring_marking<-names_fix(spring_marking)
 
 spring_marking<- spring_marking |> 
-  mutate(date = as.Date(date), GPS_Point = as.character(GPS_Point), Start_Time = as.numeric(Start_Time),
-         End_Time = as.numeric(End_Time), Seconds_Electricity = as.numeric(Seconds_Electricity),
+  mutate(date = as.Date(date), GPS_Point = as.character(GPS_Point), Start_Time = as.character(Start_Time),
+         End_Time = as.character(End_Time), Seconds_Electricity = as.numeric(Seconds_Electricity),
          Pit_tag = as.numeric(Pit_tag), Acoustic_Tag = as.numeric(Acoustic_Tag), length = as.numeric(length),
          weight = as.numeric(weight), sex = as.character(sex), Maturity = as.character(Maturity), 
          Method = as.character(Method), Recap = as.character(Recap), Mort = as.character(Mort),
