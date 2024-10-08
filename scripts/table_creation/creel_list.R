@@ -3,13 +3,15 @@ library(dplyr)
 library(stringr)
 library(reshape2)
 source("scripts/utils/fix_col_names_f.R")
+source("scripts/utils/col_types_f.R")
 
 db_filepath = "output/CultusData.sqlite"
 
 con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
 
-tableNames<-c("surveyData", "anglerInfo", "fishCatch", "fishingDetails", "weatherDetails", "surveyAnswers", "surveyQuestions", "iceData")
+tableNames<-c("surveyData", "anglerInfo", "fishCatch", "fishingDetails", "weatherDetails", "surveyAnswers", "surveyQuestions", "iceData",
+              "fishCaught")
 
 creelTable<-tableNames |> 
               data.frame() |> 
