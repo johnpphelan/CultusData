@@ -21,7 +21,7 @@ column_names
 dbClearResult(result)
 
 
-query <- "SELECT * FROM creelTables"
+query <- "SELECT * FROM nestRaw"
 dbExecute(con = con, query)
 #querydelete<-"DROP TABLE surveyData"
 result <- dbSendQuery(conn = con, query)
