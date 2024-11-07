@@ -28,6 +28,8 @@ nestRaw <- nestRaw |>
          adjacentStructure = AdjacentstructureegdockormouringbuoyNA, activityCompleted = Activitycompletedobservationvsnestdestruction,
          nestDestroyed = NestfullydestroyedYNPartially, comments = Comments)
 
+
+
 col_types<-get_col_types(nestRaw)
 
 
