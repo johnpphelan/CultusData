@@ -52,3 +52,6 @@ rsconnect/
 output/*
 *.docx
 *.png
+
+# Shiny app data folder contents
+scripts/shiny/www/**
