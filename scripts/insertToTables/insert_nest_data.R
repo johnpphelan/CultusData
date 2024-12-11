@@ -29,16 +29,47 @@ names(nestData)[names(nestData) == "...15"]<-"locs"
 
 names(nestData)
 
+
+bc<-bcmaps::bc_bound() |> sf::st_transform(3005)
 # Fixes the isntance where the position was given as lat long
 latfix<-nestData |> 
-  filter(str_detect(Latitude, "[0-9]{2}\\.")) |> 
+  filter(str_detect(Latitude, "[0-9]{2}\\."))
+  
+#latfix$northing[latfix$northing == 1299517] <- 1293517
+
+latfix<- latfix |> 
   sf::st_as_sf(coords = c("Longitude","Latitude" ), crs = 4326) |> 
   sf::st_transform(3005) |> 
   mutate(easting = sf::st_coordinates(geometry)[,2],
          northing = sf::st_coordinates(geometry)[,1],
-  ) |> 
-  sf::st_drop_geometry()
-  
+  )
+
+library(ggplot2)
+library(sf)
+ggplot() +
+  geom_sf(data = bc, color = "grey") +
+  geom_sf(data = latfix, aes(color = 1:nrow(latfix))) +
+  scale_color_viridis_c(option = "plasma") +
+  geom_sf_text(data = latfix, aes(label = 1:nrow(latfix)), size = 3, nudge_y = 0.001)
+latfix[25,]$northing
+latfix$northing[latfix$northing == 1299517] <- 1293517
+latfix[25,]$northing <- 1293517
+latfix[25,]$easting <- 444402.7
+
+latfix[25,]$northing
+latfix[25,]$easting
+latfix <- latfix |> 
+  st_drop_geometry() |> 
+  st_as_sf(coords = c("northing","easting"), crs = 3005) |> 
+  st_transform(32610)
+
+ggplot() +
+  geom_sf(data = bc, color = "grey") +
+  geom_sf(data = latfix, aes(color = 1:nrow(latfix))) +
+  scale_color_viridis_c(option = "plasma") +
+  geom_sf_text(data = latfix, aes(label = 1:nrow(latfix)), size = 3, nudge_y = 0.001)
+
+
 # fixes the instance where the position was given a different CRS
 east<-nestData |> 
   filter(!str_detect(Latitude, "[0-9]{2}\\.")) |> 
@@ -46,26 +77,49 @@ east<-nestData |>
          new_east = ifelse(str_count(Longitude, "[0-9]")==6, Longitude, Latitude)
          ) |> 
   sf::st_as_sf(coords = c( "new_east","new_north"), crs = 32610) |> 
-  sf::st_transform(3005) |> 
   mutate(easting = sf::st_coordinates(geometry)[,2],
          northing = sf::st_coordinates(geometry)[,1],
   ) |> 
-  sf::st_drop_geometry() |> 
   select(-c(Latitude, Longitude))
+
+ggplot() +
+  geom_sf(data = bc, color = "grey") +
+  geom_sf(data = east, aes(color = 1:nrow(east))) +
+  scale_color_viridis_c(option = "plasma") +
+  geom_sf_text(data = east, aes(label = 1:nrow(east)), size = 3, nudge_y = 0.001)
+
+latfix <- latfix |> 
+  mutate(easting = sf::st_coordinates(geometry)[,2],
+         northing = sf::st_coordinates(geometry)[,1],
+  ) |> 
+  st_drop_geometry()
+
+east <- east |> 
+  st_drop_geometry()
+
 
 blanks<- nestData |> 
   filter(is.na(Latitude)) |> 
   rename(easting = Latitude, northing = Longitude)
-#32610
 
-# library(ggplot2)
-# ggplot2::ggplot() +
-# geom_sf(data=bc)+ 
-#   geom_sf(data = east, color = "green") +
-#   geom_sf(data = latfix, color = "brown")
   
 nestdataClean<-rbind(latfix, east)
 nestdataClean<-rbind(nestdataClean, blanks)
+
+
+
+nestSF<- sf::st_as_sf(nestdataClean[!is.na(nestdataClean$easting),], coords = c("northing", "easting"), crs = 32610)
+
+ggplot() +
+  geom_sf(data = bc, color = "grey") +
+  geom_sf(data = nestSF, aes(color = 1:nrow(nestSF))) +
+  scale_color_viridis_c(option = "plasma") +
+  geom_sf_text(data = nestSF, aes(label = 1:nrow(nestSF)), size = 3, nudge_y = 0.001)
+
+
+
+
+
 
 test <- nestdataClean |> 
   mutate(Nests.Destroyed = case_when(
@@ -92,7 +146,7 @@ test <- nestdataClean |>
   mutate(comments = paste(comments, location, ". Substrate:",Substrate, sep = " "))
   
 
-nestDF<- nestdataClean |> 
+nestDF<- test |> 
   rename(date = Survey.., easting = easting, northing = northing, 
          depth = Depth, diameter = Diameter, guarding = Gaurding.Male, lifeStage = Life.Stage,
          adjacentStructure = Adj..Structure, activityCompleted = activity, nestDestroyed = Nests.Destroyed,
@@ -100,8 +154,10 @@ nestDF<- nestdataClean |>
   select(-c(locs, Fry.Captured, location))
 
 ### Adding new columns to the data table 
-# addCol<-"ALTER TABLE nestRaw ADD COLUMN AIS VARCHAR"
-# dbExecute(con = con, addCol)
+addCol<-"ALTER TABLE nestRaw ADD COLUMN AIS VARCHAR"
+dbExecute(con = con, addCol)
+addCol<-"ALTER TABLE nestRaw ADD COLUMN Substrate VARCHAR"
+dbExecute(con = con, addCol)
 
 
 dbAppendTable(con, "nestRaw", nestDF)
