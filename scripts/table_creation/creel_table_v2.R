@@ -232,7 +232,7 @@ answersLong <- answersTable %>%
   left_join(questionTables, by = c("Question" = "question")) |> 
   mutate(Question = questionID) |> 
   select(-questionID) |> 
-  rename( surveyNumber = Survey_No, time = Time, question = Question, answer = Answer) |> 
+  rename( surveyNumber = Survey_No, time = Time, questionID = Question, answer = Answer) |> 
   mutate(time = as.character(time))
 
 
@@ -241,7 +241,7 @@ col_types<-get_col_types(answersLong)
 
 sur_col_types_sql <- col_types |> 
   dplyr::mutate(key_status = case_when(
-    col_name %in% c("surveyNumber", "time" , "question") ~ "KEY",
+    col_name %in% c("surveyNumber", "time" , "questionID") ~ "KEY",
     TRUE ~ ""
   )) |> 
   dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(type), " ", key_status))
@@ -251,7 +251,7 @@ sur_col_types_sql <- col_types |>
 
 sql = paste0("CREATE TABLE IF NOT EXISTS surveyAnswers (
        ",paste0(sur_col_types_sql$a,collapse = ",\n"),
-             ",\nPRIMARY KEY (surveyNumber, time, question),
+             ",\nPRIMARY KEY (surveyNumber, time, questionID),
               \nFOREIGN KEY (surveyNumber, time) REFERENCES anglerInfo (surveyNumber, time),
               \nFOREIGN KEY (surveyNumber, time) REFERENCES surveyData (surveyNumber, time)
              )")
