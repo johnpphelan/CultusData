@@ -148,7 +148,7 @@ answersLong <- answersTable |>
   left_join(df, by = c("Question" = "question")) |> 
   mutate(Question = questionID) |> 
   select(-questionID) |> 
-  rename( surveyNumber = Survey_No, time = Time, question = Question, answer = Answer)  |> 
+  rename( surveyNumber = Survey_No, time = Time, questionID = Question, answer = Answer)  |> 
   mutate(time = as.character(time))
 
 
