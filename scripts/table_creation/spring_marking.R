@@ -29,6 +29,10 @@ spring_marking <- spring_marking |>
 
 col_types<-get_col_types(spring_marking)
 
+spring_marking <-spring_marking |> data.frame()
+
+spring_marking <- spring_marking |> dplyr::mutate(date = as.character(date))
+
 sur_col_types_sql <- col_types |> 
   dplyr::mutate(key_status = case_when(
     col_name %in% c("springMarkID") ~ "KEY",
