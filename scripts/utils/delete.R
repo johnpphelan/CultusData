@@ -9,7 +9,7 @@ db_filepath = "output/CultusData.sqlite"
 
 con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
-droptable<-"DROP TABLE IF EXISTS creelTables"
+droptable<-"DROP TABLE IF EXISTS surveyAnswers"
 dbExecute(con, droptable)
 
 
