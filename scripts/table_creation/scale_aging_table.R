@@ -65,17 +65,19 @@ dbListTables(con)
 
 col_types<-get_col_types(scaleNames)
 
+names(scaleNames)[2]<-"ageType"
+
 sur_col_types_sql <- col_types |> 
   dplyr::mutate(key_status = case_when(
-    col_name %in% c("keyID") ~ "KEY",
+    col_name %in% c("ageType") ~ "KEY",
     TRUE ~ ""
   )) |> 
   dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(type), " ", key_status))
 
 sql = paste0("CREATE TABLE IF NOT EXISTS scaleColNameKey (
        ",paste0(sur_col_types_sql$a,collapse = ",\n"),
-             ",\nPRIMARY KEY (keyID),
-             \n FOREIGN KEY (keyID) REFERENCES scaleRawTable (AgeType))")
+             ",\nPRIMARY KEY (ageType),
+             \n FOREIGN KEY (AgeType) REFERENCES scaleRawTable (AgeType))")
 dbExecute(con, sql)
 dbWriteTable(conn = con, "scaleColNameKey", scaleNames, row.names = F, append = T)
 dbListTables(con)
