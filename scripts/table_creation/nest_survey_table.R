@@ -2,10 +2,14 @@ library(sqldf)
 library(dplyr)
 library(tidyr)
 
+setwd("C:/Users/JPHELAN/OneDrive - Government of BC/R_projects/CultusData")
+
 source("scripts/utils/col_types_f.R")
 source("scripts/utils/fix_col_names_f.R")
 
 source("scripts/get_data/get_nest_survey.R")
+
+
 names(raw_nest_survey)
 nestRaw<- raw_nest_survey
 names(nestRaw)<-names_fix(names(nestRaw))
@@ -28,7 +32,32 @@ nestRaw <- nestRaw |>
          adjacentStructure = AdjacentstructureegdockormouringbuoyNA, activityCompleted = Activitycompletedobservationvsnestdestruction,
          nestDestroyed = NestfullydestroyedYNPartially, comments = Comments)
 
+nestcoords<-nestRaw[!is.na(nestRaw$easting),]
+nestna<-nestRaw[is.na(nestRaw$easting),]
+nestSF<- sf::st_as_sf(nestcoords, coords = c("easting", "northing"), crs = 32610) 
+bc<-bcmaps::bc_bound() |> sf::st_transform(32610)
+library(ggplot2)
 
+ggplot() +
+  geom_sf(data = bc, color = "grey") +
+  geom_sf(data = nestSF, aes(color = 1:nrow(nestSF))) +
+  scale_color_viridis_c(option = "plasma") +
+  geom_sf_text(data = nestSF, aes(label = 1:nrow(nestSF)), size = 3, nudge_y = 0.001)
+  
+nestSF <- nestSF |> 
+  sf::st_transform(32610) |> 
+  mutate(easting = sf::st_coordinates(geometry)[,1],
+         northing = sf::st_coordinates(geometry)[,2],
+         ) |> 
+  st_drop_geometry()
+  
+# ggplot() +
+#   geom_sf(data = bc, color = "grey") +
+#   geom_sf(data = nestSF, aes(color = 1:nrow(nestSF))) +
+#   scale_color_viridis_c(option = "plasma") +
+#   geom_sf_text(data = nestSF, aes(label = 1:nrow(nestSF)), size = 3, nudge_y = 0.001)
+
+nestRaw<-rbind(nestSF, nestna)
 
 col_types<-get_col_types(nestRaw)
 
