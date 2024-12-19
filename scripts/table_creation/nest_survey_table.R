@@ -9,6 +9,8 @@ source("scripts/utils/fix_col_names_f.R")
 
 source("scripts/get_data/get_nest_survey.R")
 
+raw_nest_survey <- raw_nest_survey[!is.na(raw_nest_survey$Date), ]
+  
 
 names(raw_nest_survey)
 nestRaw<- raw_nest_survey
@@ -49,7 +51,7 @@ nestSF <- nestSF |>
   mutate(easting = sf::st_coordinates(geometry)[,1],
          northing = sf::st_coordinates(geometry)[,2],
          ) |> 
-  st_drop_geometry()
+  sf::st_drop_geometry()
   
 # ggplot() +
 #   geom_sf(data = bc, color = "grey") +
