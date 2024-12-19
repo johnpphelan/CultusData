@@ -10,11 +10,11 @@ library(bcmaps)
 
 print(list.files())
 
-creds<- read.csv("www/creds.csv", sep = "\t")
+creds <- data.frame(read.table("www/creds.txt", sep = ",", header = T))
 
 credentials<-data.frame(
   user = creds$user,
-  password = scrypt::hashPassword(creds$password),
+  password = sapply(creds$password, scrypt::hashPassword),
   is_hashed_password = TRUE,
   stringsAsFactors = FALSE
 )
@@ -36,61 +36,77 @@ my_theme = bslib::bs_theme(bootswatch = 'lumen',
 
 table_choices = c('Creel - All','Raw Scale Aging','Tag Data','Spring Marking',
                   'Nest Data','Angling Basok','Angling Derby','Abundance Data', 'Scale 500',
-                  'Creel - Survey Responses', 'Creel - Angler', 'Creel - Detailed')
+                  'Creel - Survey Responses', 'Creel - Angler', 'Creel - Detailed', 'Sweltzer Creek',
+                  'Creel - survey data',
+                  'Creel - Angler Info',
+                  'Creel - fish Catch',
+                  'Creel - fishing Details',
+                  'Creel - ice data',
+                  'Creel - survey Answers',
+                  'Creel - Survey Questions',
+                  'Creel - Weather details'
+)
 table_choices<-sort(table_choices)
 
-ui <- page_sidebar( title = "Cultus Lake - Data",
-                    sidebar = sidebar(
-                      pickerInput(
-                        inputId = "table_name",
-                        label = "Select table",
-                        selected = 'Tag Data',
-                        choices = c(table_choices),
-                        multiple = F,
-                        options = pickerOptions(
-                          liveSearch = TRUE
-                        )
-                      ),
-                      #Here is a conditional piece of UI that is rendered in the script! Wacky
-                      # uiOutput('conditional_time_filter'),
-                      # uiOutput('conditional_age_class'),
-                      uiOutput('date_filter'),
-                      #uiOutput("ageFilter"),
-                      
-                      uiOutput("dynamicFilter"), 
-                      
-                      # Add a little download button for the XLSX file.
-                      # Maybe a second for a database file?
-                      bslib::layout_column_wrap(
-                        width = 1,
-                        downloadButton(
-                          "download_xlsx",
-                          "Download file (.xlsx)", 
-                        style = "color: #ffffff; background-color: #27ae22; border-color: #277c24;")
-                      )
-                    ),
-                    theme = my_theme,
-                    card(
-                     
-                      #width = 12,
-                      tabsetPanel(
-                        
-                          tabPanel("Interactive Table", 
-                                   div(style = "overflow-x: scroll; overflow-y: scroll;", DT::DTOutput("queried_table"))),
-                        tabPanel("Interactive Map", leafletOutput("my_leaf")),
-                        tabPanel("Metadata", tabsetPanel(
-                          img(src = "www/creel_data.png", width = 1000, height = 800, alt = "Creel tables")# This is where we could plop the image
-                        
-                          ) 
-                        ),
-                        tabPanel("Contact",
+ui <- page_sidebar(
+  title = "Cultus Lake - Data",
+  sidebar = sidebar(
+    pickerInput(
+      inputId = "table_name",
+      label = "Select table",
+      selected = 'Tag Data',
+      choices = c(table_choices),
+      multiple = FALSE,
+      options = pickerOptions(
+        liveSearch = TRUE
+      )
+    ),
+    uiOutput('date_filter'),
+    uiOutput("dynamicFilter"), 
+    bslib::layout_column_wrap(
+      width = 1,
+      downloadButton(
+        "download_xlsx",
+        "Download file (.xlsx)", 
+        style = "color: #ffffff; background-color: #27ae22; border-color: #277c24;"
+      )
+    )
+  ),
+  theme = my_theme,
+  card(
+    tabsetPanel(
+      tabPanel("Interactive Table", 
+               div(style = "overflow-x: scroll; overflow-y: scroll;", DT::DTOutput("queried_table"))),
+      tabPanel("Metadata", 
+               tabsetPanel(
+                 tabPanel("Creel - All",
+                          img(src = "Creel - All.png", width = 1200, height = 600, alt = "Creel - All")
+                 ),
+                 tabPanel("Creel - Detailed",
+                          img(src = "Creel - Detailed.png", width = 1200, height = 600, alt = "Creel - Detailed")
+                 ),
+                 tabPanel("Creel - Angler Info",
+                          img(src = "Creel - Angler Info.png", width = 1000, height = 600, alt = "Creel - Angler Info")
+                 ),
+                 tabPanel("Creel - Survey Response",
+                          img(src = "Creel - Survey Response.png", width = 1000, height = 600, alt = "Creel - Survey Response")
+                 )
+               )
+      ),
+      tabPanel("Contact",
+               card(
+                 a(
+                   actionButton(inputId = "email1", label = "Contact Admin", 
+                                icon = icon("envelope", lib = "font-awesome")),
+                   href = "mailto:john.phelan@gov.bc.ca"
+                 )
+               )
+      )
+    )
+  )
+)             
 
-                                 card(actionButton("emailButton", "Email Me"))
-                      )
-                      
-                    )
-)
-)
+
 
 
 ui<-secure_app(ui)
@@ -129,8 +145,8 @@ server <- function(input, output, session) {
   database_tbl_names = c("abundanceCapture", "anglerInfo", "anglingCapBasok", "anglingDerby",
                     "fishCatch", "fishCaught", "fishingDetails", "iceData", "nestRaw",
                     "recapture", "scale500", "scaleColNameKey", "scaleRawTable",
-                    "springMarking", "surveyAnswers", "surveyData", "surveyQuestions",
-                    "tagData", "weatherDetails")
+                    "springMarking", "surveyAnswers", "surveyData", "surveyQuestions", "SweltzerCreek",
+                    "tagData", "weatherDetails", "fishCaught")
   
   queries_tbl = readxl::read_excel('www/table_name_to_query_lookup_tbl.xlsx')
   
@@ -170,6 +186,10 @@ server <- function(input, output, session) {
     # }
     if('date' %in% names(merged_data)){
       merged_data$date = lubridate::ymd(merged_data$date)
+    }
+    if ("date" %in% colnames(merged_data)) {
+      # Reorder: make "date" the first column, followed by all other columns
+      merged_data <- merged_data[, c("date", setdiff(colnames(merged_data), "date"))]
     }
     merged_data
   })
