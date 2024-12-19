@@ -153,6 +153,9 @@ nestDF<- test |>
          comments = comments) |> 
   select(-c(locs, Fry.Captured, location))
 
+nestDF <- nestDF |> 
+  mutate(date = as.character(date))
+
 ### Adding new columns to the data table 
 addCol<-"ALTER TABLE nestRaw ADD COLUMN AIS VARCHAR"
 dbExecute(con = con, addCol)
