@@ -13,12 +13,12 @@ con<-dbConnect(RSQLite::SQLite(), db_filepath)
 print(dbGetInfo(con))
 print(dbListObjects(con))
 
-query <- "PRAGMA table_info(tagData);"
+query <- "PRAGMA table_info();"
 result <- dbSendQuery(con, query)
 column_names <- fetch(result, n = -1)
 column_names
 
-query <- "PRAGMA table_info(iceData);"
+query <- "PRAGMA table_info(surveyData);"
 result <- dbSendQuery(con, query)
 column_names <- fetch(result, n = -1)
 column_names
@@ -26,7 +26,7 @@ dbClearResult(result)
 
 
 
-query <- "SELECT * FROM surveyQuestions"
+query <- "SELECT * FROM surveyData"
 dbExecute(con = con, query)
 #querydelete<-"DROP TABLE surveyData"
 result <- dbSendQuery(conn = con, query)
