@@ -12,7 +12,10 @@ db_filepath = "output/CultusData.sqlite"
 con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
 scaleDataRaw<-scale_data
-names(scaleDataRaw)<-names_fix(names(scaleDataRaw))
+#names(scaleDataRaw)<-names_fix(names(scaleDataRaw))
+names(scaleDataRaw)<-gsub(";", ". ", names(scaleDataRaw))
+
+                          
 
 scaleDataRaw <- scaleDataRaw |> 
   pivot_longer(cols = c(23:ncol(scaleDataRaw)),
@@ -27,19 +30,24 @@ scaleNames<- scaleNames |>
   rename(detailedNames = scaleNames)
 
 joined_data <- left_join(scaleDataRaw, scaleNames, by = c("AgeType" = "detailedNames"))
+
+names(joined_data)<-gsub(" ", "_", names(joined_data))
+
 updated_data <- joined_data %>%
   mutate(ageType = coalesce(keyID, AgeType)) %>%
   select(-keyID, -AgeType)
 scaleDataRaw<-updated_data
 
-names(scaleDataRaw)<-gsub("_","",names(scaleDataRaw))
-
+names(scaleDataRaw)<-gsub("#", "Num",names(scaleDataRaw))
+names(scaleDataRaw)<-gsub("'", "", names(scaleDataRaw))
+names(scaleDataRaw) <- gsub("\\\\", "", names(scaleDataRaw))
+names(scaleDataRaw)<-gsub("[/()]", "_", names(scaleDataRaw))
 scaleDataRaw<- scaleDataRaw |> 
   mutate(date = dmy(date)) |> 
   mutate(date = as.character(date),
-         startTime = as.character(startTime),
-         endTime = as.character(endTime)) |> 
-  rename(lenth = lengthmm, weight = weightg)
+         start_time = as.character(start_time),
+         end_time = as.character(end_time)) |> 
+  rename(lenth = length_mm)
   
 
   
@@ -50,22 +58,24 @@ col_types<-get_col_types(scaleDataRaw)
 
 sur_col_types_sql <- col_types |> 
   dplyr::mutate(key_status = case_when(
-    col_name %in% c("originalorder, AgeType") ~ "KEY",
+    col_name %in% c("original_order, AgeType") ~ "KEY",
     TRUE ~ ""
   )) |> 
   dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
 
 sql = paste0("CREATE TABLE IF NOT EXISTS scaleRawTable (
        ",paste0(sur_col_types_sql$a,collapse = ",\n"),
-             ",\nPRIMARY KEY (originalorder, AgeType))")
+             ",\nPRIMARY KEY (original_order, AgeType))")
 dbExecute(con, sql)
 dbWriteTable(conn = con, "scaleRawTable", scaleDataRaw, row.names = F, append = T)
 dbListTables(con)
 ###########################################################################################
 
-col_types<-get_col_types(scaleNames)
+
 
 names(scaleNames)[2]<-"ageType"
+
+col_types<-get_col_types(scaleNames)
 
 sur_col_types_sql <- col_types |> 
   dplyr::mutate(key_status = case_when(
