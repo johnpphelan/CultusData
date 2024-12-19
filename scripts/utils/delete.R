@@ -2,14 +2,18 @@ library(data.table)
 library(dplyr)
 library(stringr)
 library(reshape2)
+library(DBI)
+library(RSQLite)
 source("scripts/utils/fix_col_names_f.R")
 source("scripts/utils/col_types_f.R")
 
 db_filepath = "output/CultusData.sqlite"
 
 con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
+print(dbListObjects(con))
 
-droptable<-"DROP TABLE IF EXISTS surveyAnswers"
+
+droptable<-"DROP TABLE IF EXISTS fishingDetails"
 dbExecute(con, droptable)
 
 
