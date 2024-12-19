@@ -10,22 +10,27 @@ source("scripts/utils/fix_col_names_f.R")
 
 
 
-lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/"
+lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/2024 projects/Creel Surveys/"
 
 
-file_list<-list.files(path =paste0(lan_folder,"2024 projects/Creel Surveys/Creel Survey forms 2024 (backup)/"),
-                      pattern = "*.xlsx", full.names = T)
-
+# file_list<-list.files(path =paste0(lan_folder,"2024 projects/Creel Surveys/Creel Survey forms 2024 (backup)/"),
+#                       pattern = "*.xlsx", full.names = T)
+# 
+# db_filepath = "output/CultusData.sqlite"
+# 
+# con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
+# 
+# DBI::dbListTables(con)
+# 
+# f_name<-file_list[1]
+# f_name
 db_filepath = "output/CultusData.sqlite"
-
 con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
 DBI::dbListTables(con)
 
-f_name<-file_list[1]
-f_name
-
-creelData<-read_excel(path = f_name, sheet = 1, col_names = TRUE)
+f_name<-paste0(lan_folder,"Cultus Lake Creel Form 2024_Data_Working2.xlsx")
+creelData<-read_excel(path = paste0(lan_folder,"Cultus Lake Creel Form 2024_Data_Working2.xlsx"), sheet = 2, col_names = TRUE)
 names(creelData)[names(creelData) == "# SMB c...15"]<- "# SMB c"
 names(creelData)[names(creelData) == "# SMB c...23"]<- "# SMB r"
 
@@ -36,7 +41,7 @@ namesFix<-remove_special_chars(namesFix)
 names(creelData)<-namesFix
 
 
-sheets<-excel_sheets(f_name)
+sheets<-excel_sheets(paste0(lan_folder,"Cultus Lake Creel Form 2024_Data_Working2.xlsx"))
 sheetOI<-grep("Demographic", sheets, value = TRUE)
 demograhpy<-lapply(sheetOI, read_excel, path = f_name)
 
@@ -47,7 +52,16 @@ sheetOI<-grep("ICE", sheets, value = TRUE)
 ICE<-data.frame(lapply(sheetOI, read_excel, path = f_name))
 
 
-
+creelData<-creelData |> 
+  mutate(Time = as_datetime(as.numeric(Time) * 86400, origin = "1899-12-30")) |>  # Convert Excel time to datetime
+  group_by(Time) |> 
+  mutate(
+    Time = if_else(row_number() > 1, Time + minutes(5) * (row_number() - 1), Time) # Add 5 minutes to duplicates
+  ) |> 
+  ungroup() 
+  
+  
+  
 
 survDT<- creelData |> 
   select(Survey_No, Date, Time, Surveyor, Shift) |> 
@@ -55,9 +69,15 @@ survDT<- creelData |>
   rename(surveyNumber = Survey_No, date = Date, time = Time, surveyor = Surveyor, shift = Shift) |> 
   mutate(date = as.character(date), time = as.character(time), shift = as.character(shift)) 
 
-survDT  |> 
-  mutate(surveyNumber = NA)
-
+survDT<- survDT |> 
+  mutate(date = as.Date(date)) |> 
+  arrange(date) |> 
+  mutate(date_group = cumsum(date != lag(date, default = first(date)))) |> 
+  group_by(date_group) |> 
+  mutate(surveyNumber = row_number()) |>  
+  ungroup() |> 
+  select(-date_group) |> 
+  mutate(date = as.character(date))
 
 
 recentID<-dbGetQuery(conn = con, "SELECT surveyNumber FROM surveyData")
@@ -75,6 +95,17 @@ catchDF<- creelData |>
   rename_with(~ str_replace_all(.x, "_", ""), everything()) |> 
   mutate(date = as.character(date), time = as.character(time)) 
 
+catchDF<- catchDF |> 
+  mutate(date = as.Date(date)) |> 
+  arrange(date) |> 
+  mutate(date_group = cumsum(date != lag(date, default = first(date)))) |> 
+  group_by(date_group) |> 
+  mutate(surveyNumber = row_number()) |>  
+  ungroup() |> 
+  select(-date_group) |> 
+  mutate(date = as.character(date))
+
+
 dbAppendTable(con, "fishCatch", catchDF) ## adds these - if the entry (surveyNumber and time) already exists, then it won't work
 
 ##########################################################################
@@ -88,17 +119,36 @@ fishingdetails<- creelData |>
          site = Site) |>   
   mutate(date = as.character(date), time = as.character(time))
 
+fishingdetails<- fishingdetails |> 
+  mutate(date = as.Date(date)) |> 
+  arrange(date) |> 
+  mutate(date_group = cumsum(date != lag(date, default = first(date)))) |> 
+  group_by(date_group) |> 
+  mutate(surveyNumber = row_number()) |>  
+  ungroup() |> 
+  select(-date_group) |> 
+  mutate(date = as.character(date))
+
 dbAppendTable(con, "fishingDetails", fishingdetails) ## adds these - if the entry (surveyNumber and time) already exists, then it won't work
 
 #####################################################################
 
 weatherTable<-creelData |> 
-  select(Survey_No, Time, Site, Air__temperature, Cloud_Cover, Wind, Precip) |> 
+  select(Survey_No, Date, Time, Site, Air__temperature, Cloud_Cover, Wind, Precip) |> 
   rename(surveyNumber = Survey_No, time = Time, site = Site, meanAirTemp= Air__temperature,
-         cloudCover = Cloud_Cover, wind = Wind, precip = Precip) |> 
-  mutate(time = as.character(time), wind = paste0(day(wind),"-",month(wind)))
+         cloudCover = Cloud_Cover, wind = Wind, precip = Precip)
 
-weatherTable
+
+
+weatherTable<- weatherTable |> 
+  mutate(Date = as.Date(Date)) |> 
+  arrange(Date) |> 
+  mutate(date_group = cumsum(Date != lag(Date, default = first(Date)))) |> 
+  group_by(date_group) |> 
+  mutate(surveyNumber = row_number()) |>  
+  ungroup() |> 
+  select(-date_group) |> 
+  mutate(Date = as.character(Date))
 
 dbAppendTable(con, "weatherDetails", weatherTable) ## adds these - if the entry (surveyNumber and time) already exists, then it won't work
 
@@ -140,17 +190,31 @@ df
 dbClearResult(result)
 
 answersTable<- creelData |> 
-  select(c(Survey_No, Time, contains(df$question)))
+  select(c(Survey_No, Time,Date, contains(df$question)))
 
 
 answersLong <- answersTable |>
-  pivot_longer(cols = -c(Survey_No, Time), names_to = "Question", values_to = "Answer") |> 
+  pivot_longer(cols = -c(Survey_No, Time, Date), names_to = "Question", values_to = "Answer") |> 
   left_join(df, by = c("Question" = "question")) |> 
   mutate(Question = questionID) |> 
   select(-questionID) |> 
   rename( surveyNumber = Survey_No, time = Time, questionID = Question, answer = Answer)  |> 
   mutate(time = as.character(time))
 
+answersLong<- answersLong |> 
+  mutate(time = as.character(time),
+         Date = as.character(Date))
+
+answersLong<- answersLong |>
+  rename(date = Date) |> 
+  mutate(date = as.Date(date)) |> 
+  arrange(date) |> 
+  mutate(date_group = cumsum(date != lag(date, default = first(date)))) |> 
+  group_by(date_group) |> 
+  mutate(surveyNumber = row_number()) |>  
+  ungroup() |> 
+  select(-date_group) |> 
+  mutate(date = as.character(date))
 
 
 dbAppendTable(con, "surveyAnswers", answersLong) ## adds these - if the entry (surveyNumber and time) already exists, then it won't work
