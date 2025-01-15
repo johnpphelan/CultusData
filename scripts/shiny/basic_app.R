@@ -8,48 +8,44 @@ library(leafpop)
 library(shinymanager)
 library(bcmaps)
 
-print(list.files())
-
 creds <- data.frame(read.table("www/creds.txt", sep = ",", header = T))
 
-credentials<-data.frame(
+credentials <- data.frame(
   user = creds$user,
   password = sapply(creds$password, scrypt::hashPassword),
   is_hashed_password = TRUE,
   stringsAsFactors = FALSE
 )
 
-
-my_theme = bslib::bs_theme(bootswatch = 'lumen',
-                           heading_font = 'Merriweather,serif',
-                           base_font = 'Source Sans Pro',
-                           # primary = "#EA80FC", 
-                           # secondary = "#48DAC6",
-                           "sidebar-bg" = '#ADD8E7')
-
-# setwd(paste0(getwd(),"/scripts/shiny"))
-# table_choices = c("abundanceCapture", "anglerInfo", "anglingCapBasok", "anglingDerby", 
-#                   "fishCatch", "fishCaught", "fishingDetails", "iceData", "nestRaw", 
-#                   "recapture", "scale500", "scaleColNameKey", "scaleRawTable", 
-#                   "springMarking", "surveyAnswers", "surveyData", "surveyQuestions", 
-#                   "tagData", "weatherDetails")
-
-table_choices = c('Creel - All','Raw Scale Aging','Tag Data','Spring Marking',
-                  'Nest Data','Angling Basok','Angling Derby','Abundance Data', 'Scale 500',
-                  'Creel - Survey Responses', 'Creel - Angler', 'Creel - Detailed', 'Sweltzer Creek',
-                  'Creel - survey data',
-                  'Creel - Angler Info',
-                  'Creel - fish Catch',
-                  'Creel - fishing Details',
-                  'Creel - ice data',
-                  'Creel - survey Answers',
-                  'Creel - Survey Questions',
-                  'Creel - Weather details'
+my_theme <- bslib::bs_theme(
+  bootswatch = 'lumen',
+  heading_font = 'Merriweather,serif',
+  base_font = 'Source Sans Pro',
+  "sidebar-bg" = '#ADD8E7'
 )
-table_choices<-sort(table_choices)
 
+table_choices <- c(
+  'Creel - All', 'Raw Scale Aging', 'Tag Data', 'Spring Marking',
+  'Nest Data', 'Angling Basok', 'Angling Derby', 'Abundance Data', 'Scale 500',
+  'Creel - Survey Responses', 'Creel - Angler', 'Creel - Detailed', 'Sweltzer Creek',
+  'Creel - survey data', 'Creel - Angler Info', 'Creel - fish Catch',
+  'Creel - fishing Details', 'Creel - ice data', 'Creel - survey Answers',
+  'Creel - Survey Questions', 'Creel - Weather details'
+)
+table_choices <- sort(table_choices)
+
+# Add a logout button container to the UI
 ui <- page_sidebar(
-  title = "Cultus Lake - Data",
+  title = tags$div(
+    style = "display: flex; justify-content: space-between; align-items: center; width: 100%;",
+    # Left: App Title
+    tags$span("Cultus Lake - Data", style = "font-size: 20px; font-weight: bold;"),
+    # Right: Logout Button
+    div(
+      uiOutput("logout_ui"),
+      style = "margin-left: auto;"  # Pushes the logout button to the far right
+    )
+  ),
   sidebar = sidebar(
     pickerInput(
       inputId = "table_name",
@@ -57,17 +53,15 @@ ui <- page_sidebar(
       selected = 'Tag Data',
       choices = c(table_choices),
       multiple = FALSE,
-      options = pickerOptions(
-        liveSearch = TRUE
-      )
+      options = pickerOptions(liveSearch = TRUE)
     ),
     uiOutput('date_filter'),
-    uiOutput("dynamicFilter"), 
+    uiOutput("dynamicFilter"),
     bslib::layout_column_wrap(
       width = 1,
       downloadButton(
         "download_xlsx",
-        "Download file (.xlsx)", 
+        "Download file (.xlsx)",
         style = "color: #ffffff; background-color: #27ae22; border-color: #277c24;"
       )
     )
@@ -75,9 +69,9 @@ ui <- page_sidebar(
   theme = my_theme,
   card(
     tabsetPanel(
-      tabPanel("Interactive Table", 
+      tabPanel("Interactive Table",
                div(style = "overflow-x: scroll; overflow-y: scroll;", DT::DTOutput("queried_table"))),
-      tabPanel("Metadata", 
+      tabPanel("Metadata",
                tabsetPanel(
                  tabPanel("Creel - All",
                           img(src = "Creel - All.png", width = 1200, height = 600, alt = "Creel - All")
@@ -96,20 +90,18 @@ ui <- page_sidebar(
       tabPanel("Contact",
                card(
                  a(
-                   actionButton(inputId = "email1", label = "Contact Admin", 
+                   actionButton(inputId = "email1", label = "Contact Admin",
                                 icon = icon("envelope", lib = "font-awesome")),
                    href = "mailto:john.phelan@gov.bc.ca"
                  )
                )
       )
     )
-  )
-)             
+  ),
+)
 
-
-
-
-ui<-secure_app(ui)
+# Secure the app using shinymanager
+ui <- secure_app(ui)
 
 
 server <- function(input, output, session) {
@@ -476,8 +468,25 @@ server <- function(input, output, session) {
       system(paste("xdg-open", shQuote(url)))
     }
   })
+  
+  # Render logout button with custom style
+  output$logout_ui <- renderUI({
+    actionButton(
+      inputId = "logout",
+      label = "Logout",
+      style = "background-color: #CC5500; color: white; border-color: #6A0000;",
+      class = "btn"
+    )
+  })
+  
+  # Logout logic
+  observeEvent(input$logout, {
+    user_logged_in(FALSE)  # Reset login state
+    session$reload()
+  })
+  
     } 
-})
+  })
 }
 
 shinyApp(ui, server)
