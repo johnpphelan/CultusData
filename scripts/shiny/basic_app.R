@@ -7,6 +7,7 @@ library(leaflet)
 library(leafpop)
 library(shinymanager)
 library(bcmaps)
+library(htmltools)
 
 creds <- data.frame(read.table("www/creds.txt", sep = ",", header = T))
 
@@ -25,15 +26,17 @@ my_theme <- bslib::bs_theme(
 )
 
 table_choices <- c(
-  'Creel - All', 'Raw Scale Aging', 'Tag Data', 'Spring Marking',
-  'Nest Data', 'Angling Basok', 'Angling Derby', 'Abundance Data', 'Scale 500',
-  'Creel - Survey Responses', 'Creel - Angler', 'Creel - Detailed', 'Sweltzer Creek',
-  'Creel - survey data', 'Creel - Angler Info', 'Creel - fish Catch',
-  'Creel - fishing Details', 'Creel - ice data', 'Creel - survey Answers',
-  'Creel - Survey Questions', 'Creel - Weather details'
+  'Creel - all', 'Raw scale aging', 'Tag data', 'Spring marking',
+  'Nest data', 'Angling Basok', 'Angling derby', 'Recapture data 2023', 'Scale 500',
+  'Creel - survey responses', 'Creel - angler responses', 'Creel - detailed', 'Sweltzer creek',
+  'Creel - survey data shifts', 'Creel - angler info', 'Creel - fish catch',
+  'Creel - fishing details', 'Creel - ice data', 'Creel - survey answers',
+  'Creel - survey questions', 'Creel - weather details', 'High reward tags', "High reward tags - claimed"
 )
 table_choices <- sort(table_choices)
 
+table_col_search<-c("NA","pitTagNo")
+table_col_search <- sort(table_col_search)
 # Add a logout button container to the UI
 ui <- page_sidebar(
   title = tags$div(
@@ -56,6 +59,7 @@ ui <- page_sidebar(
       options = pickerOptions(liveSearch = TRUE)
     ),
     uiOutput('date_filter'),
+    
     uiOutput("dynamicFilter"),
     bslib::layout_column_wrap(
       width = 1,
@@ -69,8 +73,29 @@ ui <- page_sidebar(
   theme = my_theme,
   card(
     tabsetPanel(
-      tabPanel("Interactive Table",
+      tabPanel("Selected Table",
                div(style = "overflow-x: scroll; overflow-y: scroll;", DT::DTOutput("queried_table"))),
+      # New Tab for displaying the column names from the found tables
+      tabPanel("Search By Column",
+               
+               pickerInput(
+                 inputId = "column_name",
+                 label = "Select column to search",
+                 selected = "NA",
+                 choices = c(table_col_search),
+                 multiple = FALSE,
+                 options = pickerOptions((liveSearch = TRUE))
+               ),
+               
+               uiOutput("columns_in_selected_tables"),
+               
+               downloadButton(
+                 "download_filtered_tables",
+                 "Download Tables (.zip)",
+                 style = "color: #ffffff; background-color: #e67e22; border-color: #d35400;"
+               )
+      ),
+  
       tabPanel("Metadata",
                tabsetPanel(
                  tabPanel("Creel - All",
@@ -138,7 +163,7 @@ server <- function(input, output, session) {
                     "fishCatch", "fishCaught", "fishingDetails", "iceData", "nestRaw",
                     "recapture", "scale500", "scaleColNameKey", "scaleRawTable",
                     "springMarking", "surveyAnswers", "surveyData", "surveyQuestions", "SweltzerCreek",
-                    "tagData", "weatherDetails", "fishCaught")
+                    "tagData", "weatherDetails", "fishCaught", "highRewardTags", "highRewardTagsClaimed")
   
   queries_tbl = readxl::read_excel('www/table_name_to_query_lookup_tbl.xlsx')
   
@@ -159,8 +184,9 @@ server <- function(input, output, session) {
     list_of_queries
   })
   
-  # Loop over the list of queries, combining tables afterwards
   
+  
+  # Loop over the list of queries, combining tables afterwards
   queried_tbl = reactive({
     merged_data = purrr::map(initial_query(), ~ {
       DBI::dbGetQuery(my_db,.x) |> 
@@ -185,6 +211,8 @@ server <- function(input, output, session) {
     }
     merged_data
   })
+  
+  
   
   # We may want an additional set of filters based on WHAT columns our table has...
   # To do this, we could dynamically render new UI pieces based on our server script.
@@ -216,6 +244,8 @@ server <- function(input, output, session) {
       )
     }
   })
+  
+
   
   output$ageFilter = renderUI({
     
@@ -345,6 +375,9 @@ server <- function(input, output, session) {
           date <= as.Date(input$tbl_date_filter[2])
         )
     }
+
+    
+    
     if (!is.null(input$age_class_filter) && "AgeClass" %in% names(output)) {
       output = output |> 
         dplyr::filter(AgeClass %in% input$age_class_filter) # Match selected values
@@ -394,6 +427,109 @@ server <- function(input, output, session) {
     final_table()
   })
   
+  
+  ################################################################
+  
+  # Reactive to get tables containing the selected column
+  tables_with_column <- reactive({
+    selected_column <- input$column_name
+    tables <- dbListTables(my_db)
+    tables_with_column <- c()
+    
+    for (table in tables) {
+      column_info <- dbGetQuery(my_db, paste0("PRAGMA table_info(", table, ")"))
+      
+      if (selected_column %in% column_info$name) {
+        tables_with_column <- c(tables_with_column, table)
+      }
+    }
+    
+    return(tables_with_column)  # Return the names of tables with the selected column
+  })
+  
+  # output$filtered_tables_tab <- renderUI({
+  #   tables <- tables_with_column()  # Get the table names with the selected column
+  #   if (length(tables) > 0) {
+  #     tagList(
+  #       h4("Tables containing the selected column:"),
+  #       div(style = "margin-bottom: 10px;",
+  #           paste(tables, collapse = ", ")  # Display table names as comma-separated text
+  #       ),
+  #       downloadButton("download_filtered_tables", "Download Tables with Selected Column")
+  #     )
+  #   } else {
+  #     "No tables found with the selected column."
+  #   }
+  # })
+  
+  # Render the column names in the "Column Names" tab
+  output$columns_in_selected_tables <- renderUI({
+    selected_column <- input$column_name
+    tables <- tables_with_column()  # Get the table names with the selected column
+    
+    if (length(tables) > 0) {
+      bslib::card(
+        bslib::card_body(
+          tagList(
+            tags$h4("Tables with Selected Variable"),
+            tags$p(
+              style = "margin-bottom: 15px;",
+              paste0("The following tables include the column '", selected_column, "':")
+            ),
+            div(
+              style = "padding-left: 10px;",
+              HTML(paste0("• ", tables, collapse = "<br>"))
+            )
+          )
+        ),
+        style = "background-color: #eaeaea; border: 1px solid #0a0d13; padding: 20px; border-radius: 8px;"
+      )
+    } else {
+      bslib::card(
+        bslib::card_body(
+          tags$p(
+            style = "color: #ff0000; font-weight: bold;",
+            "No tables found with the selected column."
+          )
+        ),
+        style = "background-color: #fce4e4; border: 1px solid #f5c6cb; padding: 20px; border-radius: 8px;"
+      )
+    }
+  })
+  
+  # Handle downloading of tables as a zip file
+  output$download_filtered_tables <- downloadHandler(
+    filename = function() {
+      paste0("tables_with_column_", input$column_name, ".zip")
+    },
+    content = function(file) {
+      # Write tables to a zip file
+      
+      tmp_dir <- paste0(tempdir(), Sys.Date())
+      dir.create(tmp_dir)
+      #zip_file <- file.path(tmp_dir, "tables_with_column.zip")
+      
+      files <- c()
+      tables <- tables_with_column()
+      
+      for (table in tables) {
+        table_data <- dbGetQuery(my_db, paste0("SELECT * FROM ", table))
+        table_file <- file.path(tmp_dir, paste0(table, ".csv"))
+        
+        write.csv(table_data, table_file, row.names = FALSE)
+        if (file.info(table_file)$size == 0) {
+          stop(paste("Error: File", table_file, "is empty"))
+        }
+        files <- c(files, table_file)
+      }
+      
+      zip::zip(zipfile = file, files = dir(tmp_dir), root = tmp_dir)
+      
+      #file.copy(zip_file, file)
+    }
+  )
+ 
+  ##################################################################################
   output$my_leaf = renderLeaflet({
     
     # if(input$table_name == "nestRaw") browser()
@@ -481,8 +617,8 @@ server <- function(input, output, session) {
   
   # Logout logic
   observeEvent(input$logout, {
-    user_logged_in(FALSE)  # Reset login state
     session$reload()
+    user_logged_in(FALSE)  # Reset login state
   })
   
     } 
