@@ -37,6 +37,20 @@ survDT <- survDT |>
   ungroup() |> 
   mutate(time = as.character(time))
   
+survDT <- survDT |> 
+  mutate(
+    shift = str_remove(shift, "^\\d+: "),
+    shift_end = sub(".*-", "", shift),
+    shift_start = sub("-.*", "", shift),
+    shift_start = if_else(str_detect(shift_start, "^\\d{1,2}:\\d{2}$"), paste0(shift_start, ":00"), shift_start),
+    shift_end = if_else(str_detect(shift_end, "^\\d{1,2}:\\d{2}$"), paste0(shift_end, ":00"), shift_end),
+    shift_start_time = hms::parse_hms(shift_start),
+    shift_end_time = hms::parse_hms(shift_end),
+    hours_worked = as.numeric(difftime(shift_end_time, shift_start_time, units = "hours"))
+  ) |> 
+  mutate(shift_start_time = as.character(paste(date, shift_start_time)),
+         shift_end_time = as.character(paste(date, shift_end_time))) |> 
+  select(surveyNumber, date, time, surveyor, shift_start_time, shift_end_time, hours_worked)
 
 
 sur_col_types <- get_col_types(survDT)
@@ -51,6 +65,7 @@ sur_col_types_sql <- sur_col_types |>
     TRUE ~ ""
   )) |> 
   dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
+
 
 
 
