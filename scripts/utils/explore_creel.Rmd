@@ -1,0 +1,565 @@
+---
+title: "Creel survey data"
+author: "John Phelan"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, fig.width = 10, fig.height = 8)
+
+library(tidyverse)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(stringr)
+library(kableExtra)
+library(data.table)
+library(lubridate)
+library(geosphere)
+library(ggmap)
+
+onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/R_projects/CultusData/")
+all_creel <- read_xlsx(paste0(onedrive_wd,"/data/Cultus_Lake_Creel_-_All_Query.xlsx"))
+
+results_2023<- all_creel |> 
+  mutate(date = as.Date(date)) |> 
+  filter(date < as.Date("2024-01-01")) |> 
+  summarize(not_na_count = sum(!is.na(prefferedSpp)))
+
+results_2024<- all_creel |> 
+  mutate(date = as.Date(date)) |> 
+  filter(date >= as.Date("2024-01-01")) |> 
+  summarize(not_na_count = sum(!is.na(prefferedSpp)))  
+
+custom_theme <- theme(
+  axis.title = element_text(face = "bold"),    # Make axis titles bold
+  axis.text = element_text(face = "bold"),     # Make axis ticks bold
+  legend.title = element_text(face = "bold"),  # Make legend title bold
+  legend.text = element_text(face = "bold")    # Make legend labels bold
+)
+
+```
+
+## Preferred Fish species {.tabset}
+
+In 2023, **`r results_2023$not_na_count`** anglers provided information about their target species. This number increased to **`r results_2024$not_na_count`** in 2024. 
+
+### Preferred fish 2023 barchart 
+
+
+```{r fish_2023}
+
+fish_spp2023<- all_creel |> 
+  mutate(date = as.Date(date)) |> 
+  subset(date < as.Date("2024-01-01")) |> 
+  select(date, anglerID, prefferedSpp, site, numberAnglers, numberRods, personHoursFished,totFishCaught , totRetained) 
+
+
+
+
+species_count_2023 <- fish_spp2023 |> 
+  mutate(prefferedSpp = str_replace_all(prefferedSpp, ";", ",")) |> 
+  mutate(
+    prefferedSpp = str_trim(prefferedSpp),  # Remove leading/trailing spaces
+    prefferedSpp = str_to_lower(prefferedSpp),
+    prefferedSpp = str_replace_all(prefferedSpp,  # Correct specific typos
+                                   c(
+                                     "^trout$" = "trout",
+                                     " northern pikeminow" = "northern pikeminnow",
+                                     "trout " = "trout",
+                                     "pikeminow" = "northern pikeminnow",
+                                     "northern northern pikeminnow" = "northern pikeminnow",
+                                     "typically fish salmon" = "salmon"))
+  ) |> 
+  separate_rows(prefferedSpp, sep = ",") |>      # Handle multiple species in a single cell
+  mutate(prefferedSpp = str_trim(prefferedSpp)) |> 
+  filter(!is.na(prefferedSpp) & prefferedSpp != "") |> 
+  count(prefferedSpp, sort = TRUE)
+
+species_23_plot<- species_count_2023 |> arrange(desc(n)) %>% 
+  slice_head(n = 6) 
+
+# Generate a vector of distinct colors, one for each species
+species_colors <- RColorBrewer::brewer.pal(n = length(unique(species_23_plot$prefferedSpp)), name = "Dark2")
+
+
+ggplot(species_23_plot, aes(x = reorder(prefferedSpp, n), y = n, fill = prefferedSpp)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  coord_flip() +
+  labs(
+    title = "Preferred Species: 2023",
+    x = "Species",
+    y = "Count"
+  ) +
+  scale_fill_manual(values = species_colors) +  # Use the manually assigned colors
+  geom_text(aes(label = n), hjust = -0.2, size = 4, fontface = "bold") + 
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12, face = "bold"),  # Bold x-axis text and ticks
+    axis.text.y = element_text(size = 12, face = "bold"),  # Bold y-axis text and ticks
+    axis.title.x = element_text(size = 14, face = "bold"),  # Larger and bold x-axis label
+    axis.title.y = element_text(size = 14, face = "bold"),  # Larger and bold y-axis label
+    plot.title = element_text(size = 16, face = "bold")
+  )
+
+```
+
+
+### Preferred fish 2024 barchart
+
+
+
+```{r fish_2024}
+
+fish_spp2024<- all_creel |> 
+  mutate(date = as.Date(date)) |> 
+  subset(date >= as.Date("2024-01-01")) |> 
+  select(date, anglerID, prefferedSpp, site, numberAnglers, numberRods, personHoursFished,totFishCaught , totRetained)
+
+species_count_2024 <- fish_spp2024 |> 
+  mutate(
+    # Replace semicolons and "and/or" with commas
+    prefferedSpp = str_replace_all(prefferedSpp, ";|\\band\\b|\\bor\\b", ","),
+    # Clean up spaces and convert to lowercase
+    prefferedSpp = str_trim(str_to_lower(prefferedSpp))
+  ) |> 
+  # Split rows by commas
+  separate_rows(prefferedSpp, sep = ",") |> 
+  mutate(
+    # Trim whitespace again after splitting
+    prefferedSpp = str_trim(prefferedSpp),
+    # Correct specific typos and normalize values
+    prefferedSpp = str_replace_all(prefferedSpp, c(
+      "^trout$" = "trout",
+      "northern pikeminow" = "northern pikeminnow",
+      "trout " = "trout",
+      "pikeminow" = "northern pikeminnow",
+      "northern northern pikeminnow" = "northern pikeminnow",
+      "typically fish salmon" = "salmon",
+      "smb" = "smallmouth bass",
+      "\\b(any|any kind|anythingthing)\\b" = "anything",
+      "\\bbass\\b" = "smallmouth bass",
+      "pike" = "northern pikeminnow",
+      "troutor" = "trout",
+      "smallmouth smallmouth bass" = "smallmouth bass",
+      "northern pikeminnowminn" = "northern pikeminnow",
+      "but whatever is in" = "anything",
+      "\\b(not an angler|not anglers|non-anglers)\\b" = "non-angler",
+      "pileminnow" = "northern pikeminnow",
+      "ps" = "pumpkinseed",
+      "suckers" = "sucker",
+      "\\b(rb|rt)\\b" = "rainbow trout",
+      "notrouthern pikeminnow" = "northern pikeminnow",
+      "ct" = "cutthroat trout"
+    ))
+  ) |> 
+  # Filter out NA and empty strings
+  filter(!is.na(prefferedSpp) & prefferedSpp != "") |> 
+  # Count occurrences, sorted
+  count(prefferedSpp, sort = TRUE)
+
+# Exclude "non-angler" temporarily for the plot
+species_24_plot_filtered <- species_count_2024 |> 
+  filter(prefferedSpp != "non-angler") |> 
+  arrange(desc(n)) |> 
+  slice_head(n = 6)  # Keep the top 6 species
+
+# Generate a vector of distinct colors, one for each species
+species_colors <- RColorBrewer::brewer.pal(n = length(unique(species_24_plot_filtered$prefferedSpp)), name = "Dark2")
+
+# Plot without "non-angler"
+ggplot(species_24_plot_filtered, aes(x = reorder(prefferedSpp, n), y = n, fill = prefferedSpp)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  coord_flip() +
+  labs(
+    title = "Preferred Species: 2024",
+    x = "Species",
+    y = "Count"
+  ) +
+  scale_fill_manual(values = species_colors) +  # Use the manually assigned colors
+  geom_text(aes(label = n), hjust = -0.2, size = 4, fontface = "bold") + 
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12, face = "bold"),  # Bold x-axis text and ticks
+    axis.text.y = element_text(size = 12, face = "bold"),  # Bold y-axis text and ticks
+    axis.title.x = element_text(size = 14, face = "bold"),  # Larger and bold x-axis label
+    axis.title.y = element_text(size = 14, face = "bold"),  # Larger and bold y-axis label
+    plot.title = element_text(size = 16, face = "bold")
+  )
+
+```
+
+
+
+### Fish species 2023 list
+
+```{r fish_spp_23_list}
+
+setDT(species_count_2023)
+species_count_2023 |> 
+  rename(`Preferred species` = prefferedSpp ) |> 
+  kbl(caption = "Species targeted by anglers in 2023") |> 
+   kable_classic(full_width = F, html_font = "Cambria")
+  
+
+```
+
+### Fish epcies 2024 list
+
+```{r fish_spp_24_list}
+setDT(species_count_2024)
+species_count_2024 |> 
+  rename(`Preferred species` = prefferedSpp ) |> 
+  kbl(caption = "Species targeted by anglers in 2024") |> 
+   kable_classic(full_width = F, html_font = "Cambria")
+```
+
+## Angler Details {.tabset} 
+
+This is a summary of the anglers, where they fished and with what gear was used for both years combined.
+
+
+```{r angler_details}
+
+angler_details <- all_creel %>%
+  group_by(date, surveyNumber) %>%
+  summarise(
+    site = first(site),
+    residency = first(residency),
+    numberAnglers = sum(as.numeric(numberAnglers), na.rm = TRUE),
+    numberRods = sum(as.numeric(numberRods), na.rm = TRUE),
+    personHoursFished = sum(as.numeric(personHoursFished), na.rm = TRUE),
+    noAnglingBoats = sum(as.numeric(noAnglingBoats), na.rm = TRUE),
+    noBoatAnglers = sum(as.numeric(noBoatAnglers), na.rm = TRUE),
+    noShoreAnglers = sum(as.numeric(noShoreAnglers), na.rm = TRUE),
+    noDockAnglers = sum(as.numeric(noDockAnglers), na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  filter(if_any(everything(), ~ !is.na(.)))
+
+angling_months <- all_creel |> 
+  mutate(date = as.Date(date)) |> 
+  select(date, surveyNumber) |> 
+  distinct(date, surveyNumber, .keep_all = TRUE)
+
+```
+
+### Site plot
+
+```{r site_plot}
+
+site_summary <- angler_details |> 
+  mutate(site = str_replace_all(site, c(
+    "3: Maple Bay" = "Maple Bay"
+  ))) |> 
+  mutate(site = str_replace_all(site, c(
+    "Maple Bay" = "3: Maple Bay"
+  ))) |> 
+  group_by(site) |> 
+  summarize(total_anglers = sum(as.numeric(numberAnglers), na.rm = TRUE), .groups = "drop") |> 
+  filter(!is.na(site))
+
+  ggplot(site_summary, aes(x = site, y = total_anglers, fill = site)) +
+    geom_bar(stat = "identity") +
+    theme_minimal() +
+    scale_fill_brewer(palette = "Dark2") +
+    labs(title = "Total Anglers per Site",
+         x = "Site",
+         y = "Total Anglers",
+         fill = "Site") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+    custom_theme
+
+
+
+```
+
+
+### Survey effort
+
+```{r month_plot}
+
+angling_months <- angling_months %>%
+  mutate(MonthYear = floor_date(date, "month"))
+
+monthly_counts <- angling_months %>%
+  group_by(MonthYear) %>%
+  summarise(Total = n())
+
+ggplot(monthly_counts, aes(x = MonthYear, y = Total)) +
+  geom_line() +
+  geom_point() +  # Add points for clarity
+  labs(x = "Month", y = "Total surveys", title = "Surveys completed by month") +
+  theme_minimal() +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "1 month") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  custom_theme
+
+```
+
+### Gender and age of anglers
+
+```{r}
+
+demo <- all_creel |> 
+  distinct(date, surveyNumber, .keep_all = TRUE) |> 
+  select(gender, AgeClass) |> 
+  filter(!is.na(AgeClass)) |> 
+  complete(gender, AgeClass, fill = list(n = 0)) |> 
+  filter(!is.na(gender))  # Remove NA from gender
+
+ggplot(demo, aes(x = AgeClass, fill = gender)) +
+  geom_bar(position = "dodge") +
+  labs(x = "Age Class", y = "Count", fill = "Gender") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylim(0, 250)+
+  custom_theme
+
+
+```
+
+
+
+### Fishing methods
+
+```{r fishing_methods}
+
+# Prepare the data: summarize the methods of fishing
+angler_details_summary <- angler_details %>%
+  select(noAnglingBoats, noBoatAnglers, noShoreAnglers, noDockAnglers) %>%
+  summarise(
+    Boat_Anglers = sum(as.numeric(noBoatAnglers), na.rm = TRUE),
+    Shore_Anglers = sum(as.numeric(noShoreAnglers), na.rm = TRUE),
+    Dock_Anglers = sum(as.numeric(noDockAnglers), na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = everything(), names_to = "Fishing_Method", values_to = "Total_Anglers")
+
+ggplot(angler_details_summary, aes(x = Fishing_Method, y = Total_Anglers, fill = Fishing_Method)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Fishing Methods and Total Anglers", 
+       x = "Fishing Method", 
+       y = "Total Anglers",
+       fill = "Method") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  custom_theme
+```
+
+
+### Visitor vs resident
+
+From both years, there were 264 recorded for the residency of the anglers.  
+
+```{r residency_plot}
+
+angler_residency <- angler_details |> 
+  filter(if_any(everything(), ~ !is.na(.))) |> 
+  filter(!is.na(residency)) |> 
+  mutate(residency = recode(residency, 
+                            "Residency" = "Resident"))
+
+# Plotting the data
+ggplot(angler_residency, aes(x = residency)) +
+  geom_bar(fill = "steelblue") +
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5, color = "black", fontface = "bold") +
+  labs(title = "Distribution of Residency",
+       x = "Residency",
+       y = "Count") +
+  theme_minimal() +
+  custom_theme
+
+
+```
+
+### Distance to Cultus lake
+
+
+```{r cultus_distance}
+
+distance_all<- all_creel |> 
+  distinct(date, surveyNumber, .keep_all = TRUE) |> 
+  select(cityProvinceCountry, postCode) |> 
+  filter(if_any(everything(), ~ !is.na(.)))
+
+postcodes<-distance_all[!is.na(distance_all$postCode),]
+
+cultus_loc <- c(lat = 49.067898710337715, lon = -121.97819734971488)
+
+
+geocoded_postcodes <- postcodes |> 
+  distinct(postCode) |>  # Only geocode unique postal codes
+  mutate(
+    postCode = str_to_upper(postCode),  # Capitalize postal codes
+    geocode_result = map(postCode, ~ geocode(.x, output = "latlona")),
+    lat = map_dbl(geocode_result, "lat"),
+    lon = map_dbl(geocode_result, "lon")
+  )
+
+# geocoded_postcodes |> 
+#   filter(is.na(lat) | is.na(lon)) |> 
+#   print(n = Inf)
+
+geocoded_postcodes <- geocoded_postcodes |> 
+  filter(!is.na(lat))
+# Calculate distances (in kilometers)
+geocoded_postcodes <- geocoded_postcodes |> 
+  mutate(
+    distance_km = distHaversine(
+      cbind(lon, lat),  # Coordinates of postal codes
+      c(cultus_loc["lon"], cultus_loc["lat"])  # Coordinates of Cultus Lake
+    ) / 1000  # Convert meters to kilometers
+  )
+
+```
+
+There were **`r nrow(distance_all)`** responses that had either a location and/or a postcode included in the survey responses. Of those, **`r nrow(postcodes)`** post codes were supplied. **`r nrow(geocoded_postcodes)`** postcodes were found to be usable Canadian postcodes, which could be used to calculate a distance to Cultus lake. 
+
+
+```{r distance_plots}
+
+# ggplot(geocoded_postcodes, aes(x = distance_km)) +
+#   geom_histogram(
+#     binwidth = 100,  # Set bin width to 50 km
+#     fill = "steelblue", 
+#     color = "black"
+#   ) +
+#   labs(
+#     title = "Histogram of Distances from Cultus Lake",
+#     x = "Distance (km)",
+#     y = "Count"
+#   ) +
+#   theme_minimal() +
+#   scale_x_continuous(
+#     breaks = seq(0, 12000, by = 500),
+#     limits = c(0, 12000) 
+#   ) +
+#   theme(
+#     plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+#     axis.title = element_text(size = 14, face = "bold"),
+#     axis.text = element_text(size = 12),
+#     axis.text.x = element_text(angle = 45, hjust = 1) 
+#   )
+```
+
+```{r distance_table}
+
+geocoded_postcodes <- geocoded_postcodes %>%
+  mutate(distance_bin = cut(distance_km, 
+                            breaks = c(seq(0, max(distance_km) - 50, by = 50), max(distance_km) + 1),  # Include the max value in the last bin
+                            include.lowest = TRUE, 
+                            right = FALSE,
+                            labels = paste0(seq(0, max(distance_km) - 50, by = 50), 
+                                            " - ", 
+                                            seq(50, max(distance_km), by = 50))))
+
+# Summarize the count of postal codes in each bin and filter out empty bins
+distance_table <- geocoded_postcodes %>%
+  group_by(distance_bin) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  filter(count > 0) %>%
+  arrange(distance_bin)
+
+# Convert to data.table for better handling of table formatting
+setDT(distance_table)
+
+# Display the table using kableExtra
+distance_table |> 
+  rename(`distance to postcode` = distance_bin) |> 
+  kbl(caption = "50km Distance Bins for Anglers") |> 
+  kable_classic(full_width = F, html_font = "Cambria")
+
+```
+
+
+
+### Caught vs retained
+
+Fish that were caught were not kept! Only some fish are being retained.
+
+```{r caught_vs retained}
+
+caught_retained<- all_creel[, grep("^No.*[rc]$", names(all_creel))] 
+
+caught_retained <- cbind(caught_retained, 
+                         all_creel[, c("totRetained", "totFishCaught")])
+
+caught_retained <- caught_retained |> 
+  filter(if_any(everything(), ~ !is.na(.)))
+  
+
+caught_retained <- caught_retained |> 
+  mutate(across(ends_with("c"), as.numeric)) |> 
+  mutate(across(ends_with("r"), as.numeric))
+
+caught_retained_selected <- caught_retained %>%
+  select(starts_with("No") & (ends_with("r") | ends_with("c")))
+
+caught_retained_long <- caught_retained_selected %>%
+  pivot_longer(cols = everything(),
+               names_to = c("Species", "Type"),
+               names_pattern = "(No.*)(r|c)",
+               values_to = "Count") %>%
+  filter(!is.na(Count))
+
+caught_retained_summarized <- caught_retained_long %>%
+  complete(Species, Type = c("r", "c"), fill = list(Count = 0)) %>%
+  group_by(Species, Type) %>%
+  summarise(Total = sum(Count, na.rm = TRUE), .groups = "drop")
+
+caught_retained_summarized<- caught_retained_summarized |> 
+  mutate(Species = str_replace_all(Species, c(
+    "NoKO" = "Kokanee salmon",
+    "NoCT" = "Cutthroat trout",
+    "NoBT" = "Bull trout",
+    "NoLT" = "Lake trout",
+    "NoRB" = "Rainbow trout",
+    "NoOtherSpp" = "Other species",
+    "Nopikeminnow" = "Northern pikeminnow",
+    "NoSMB" = "Smallmouth bass"
+  )))
+
+
+ggplot(caught_retained_summarized, aes(x = Species, y = Total, fill = Type)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.35) +  # Set bar width here
+  labs(x = "Species", y = "Total Count", fill = "Type") +
+  theme_minimal() +
+  #scale_fill_brewer(palette = "Dark2") +
+  scale_fill_manual(values = c("r" = "blue", "c" = "purple"), labels = c("Caught", "Retained")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  custom_theme
+
+```
+
+
+### Caught vs retained - totals
+
+```{r caught_retained_totals}
+summary_data <- caught_retained |> 
+  mutate(totRetained = as.numeric(totRetained),
+         totFishCaught = as.numeric(totFishCaught)) |> 
+  summarise(
+    TotalRetained = sum(totRetained, na.rm = TRUE),
+    TotalCaught = sum(totFishCaught, na.rm = TRUE)
+  )
+
+summary_long <- summary_data %>%
+  gather(key = "Type", value = "Total", TotalRetained, TotalCaught) %>%
+  mutate(Type = recode(Type, TotalRetained = "Retained", TotalCaught = "Caught"))
+
+ggplot(summary_long, aes(x = Type, y = Total, fill = Type)) +
+  geom_bar(stat = "identity", width = 0.35) +
+  geom_text(aes(label = round(Total)), vjust = -0.5, size = 5) +  # Add text labels
+  labs(x = "Type", y = "Total Count", fill = "Type") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))+
+  custom_theme
+
+```
+
+
+
