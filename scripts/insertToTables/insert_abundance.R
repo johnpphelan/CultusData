@@ -29,7 +29,8 @@ names(abundanceData)<-gsub("'", "", names(abundanceData))
 abundancedata<- abundanceData |> 
   select(date, GPSstart, GPSfinish, SecondsElectricity, PITtag, AcousticTag, length, weight,
          sex, Maturity, Method, Recap, Mort, ScaleBookNo, ScaleNos, Comments, StartTime, EndTime,
-         WaterTemp, Stomach, Euthanized, PassNo) 
+         WaterTemp, Stomach, Euthanized, PassNo) |> 
+  mutate(date = as.character(date))
 
 query <- "SELECT MAX(captureID) FROM abundanceCapture"
 result <- dbGetQuery(con, query)
