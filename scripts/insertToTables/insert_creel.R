@@ -79,6 +79,22 @@ survDT<- survDT |>
   select(-date_group) |> 
   mutate(date = as.character(date))
 
+survDT<- survDT |>
+  mutate(
+    shift = str_remove(shift, "^\\d+: "),
+    shift_end = sub(".*-", "", shift),
+    shift_start = sub("-.*", "", shift),
+    shift_start = if_else(str_detect(shift_start, "^\\d{1,2}:\\d{2}$"), paste0(shift_start, ":00"), shift_start),
+    shift_end = if_else(str_detect(shift_end, "^\\d{1,2}:\\d{2}$"), paste0(shift_end, ":00"), shift_end),
+    shift_start_time = hms::parse_hms(shift_start),
+    shift_end_time = hms::parse_hms(shift_end),
+    hours_worked = as.numeric(difftime(shift_end_time, shift_start_time, units = "hours"))
+  ) |> 
+  mutate(shift_start_time = as.character(paste(date, shift_start_time)),
+         shift_end_time = as.character(paste(date, shift_end_time))) |> 
+  select(surveyNumber, date, time, surveyor, shift_start_time, shift_end_time, hours_worked)
+
+
 
 recentID<-dbGetQuery(conn = con, "SELECT surveyNumber FROM surveyData")
 dbAppendTable(con, "surveyData", survDT) ## adds these - if the entry (surveyNumber and time) already exists, then it won't work
