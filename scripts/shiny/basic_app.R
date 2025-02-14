@@ -25,15 +25,14 @@ my_theme <- bslib::bs_theme(
   "sidebar-bg" = '#ADD8E7'
 )
 
-table_choices <- c(
-  'Creel - all', 'Raw scale aging', 'Tag data', 'Spring marking',
-  'Nest data', 'Angling Basok', 'Angling derby', 'Recapture data 2023', 'Scale 500',
-  'Creel - survey responses', 'Creel - angler responses', 'Creel - detailed', 'Sweltzer creek',
-  'Creel - survey data shifts', 'Creel - angler info', 'Creel - fish catch',
-  'Creel - fishing details', 'Creel - ice data', 'Creel - survey answers',
-  'Creel - survey questions', 'Creel - weather details', 'High reward tags', "High reward tags - claimed"
-)
-table_choices <- sort(table_choices)
+table_choices <- c("Scale aging", "Tag data", "Spring marking", "Nest data", "Angling Basok", "Angling derby", 
+                   "Recapture data", "Scale 500", "Sweltzer creek", "Creel - Fish Details", 
+                   "Creel - Fishing Results", "Creel - Fisher Survey", "Creel - Shifts", "Creel - Weather Conditions", 
+                    "High reward tags", "High reward tags - claimed","Creel - Survey Responses")
+table_choices<-sort(table_choices)
+
+creel_tables<-c("Creel - Fish Details","Creel - Fisher Survey", "Creel - Fishing Results","Creel - Shifts",
+                "Creel - Survey Responses","Creel - Weather Conditions")
 
 table_col_search<-c("NA","pitTagNo")
 table_col_search <- sort(table_col_search)
@@ -53,7 +52,7 @@ ui <- page_sidebar(
     pickerInput(
       inputId = "table_name",
       label = "Select table",
-      selected = 'Tag Data',
+      selected = 'Tag data',
       choices = c(table_choices),
       multiple = FALSE,
       options = pickerOptions(liveSearch = TRUE)
@@ -96,6 +95,33 @@ ui <- page_sidebar(
                )
       ),
   
+      # How will this look?
+      # We should have a drop down menu in the panel, where we can choose the creel tables
+      # There are multiple choices
+      tabPanel("Creel - Table Joins",
+               
+               # gets the names of the tables
+               
+               selectizeInput(
+                 inputId = "Creel_selections",
+                 label = "Select Creel tables to join",
+                 choices = creel_tables,
+                 multiple = TRUE,
+                 options =list(create = TRUE)
+               ),
+               
+               #we need to join the tables in the server, then display them!
+               div(style = "overflow-x: scroll; overflow-y: scroll;", DT::DTOutput("creel_joined_tables")),
+               
+               uiOutput("selected_creel_tables"),
+               
+               downloadButton(
+                 "download_creel_tables",
+                 "Download Creel Tables (.zip)",
+                 style = "color: #ffffff; background-color: #e67e22; border-color: #d35400;"
+               )
+      ),
+      
       tabPanel("Metadata",
                tabsetPanel(
                  tabPanel("Creel - All",
@@ -192,7 +218,7 @@ server <- function(input, output, session) {
       DBI::dbGetQuery(my_db,.x) |> 
         dplyr::mutate(dplyr::across(dplyr::everything(), \(x) as.character(x)))
     }) |> 
-      purrr::reduce(dplyr::full_join)
+      purrr::reduce(dplyr::left_join)
     
     # Ensure that the time and date columns are in the proper format!
     # if('time' %in% names(merged_data)){
