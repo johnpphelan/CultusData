@@ -13,18 +13,21 @@ con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
 DBI::dbListTables(con)
 
-f_name<-paste0(lan_folder,"High reward tags claimed.xlsx")
-high_tags_claimed<-read_excel(path = f_name, col_names = TRUE)
 
-high_tags_claimed<-high_tags_claimed |> 
+high_tags_claimed<-read_excel(path = "./data/High reward tags.xlsx", col_names = TRUE)
+
+high_tags_claimed_reduced<-high_tags_claimed |> 
   mutate(rewardID = row_number()) |> 
-  rename(year = Year, dateReported = `Date reported`, name = Name, tagID = `Tag #`,
+  rename(year = Year, date = `Date reported`, name = Name, tagID = `Tag #`,
          harvested = `Harvested?`, sentMoney = `sent for $$`, address = Address, 
          phoneNumber = `Phone number`, email = `Email address`, length = `Length mm`, 
          notes = Notes) |> 
-  mutate(dateReported = as.character(dateReported))
+  mutate(date = as.character(date)) |> 
+  select(date, tagID, harvested, length, notes, rewardID)
 
-sur_col_types <- get_col_types(high_tags_claimed)
+write.csv(high_tags_claimed_reduced, "./output/high_tags_claimed_reduced.csv", row.names = F)
+
+sur_col_types <- get_col_types(high_tags_claimed_reduced)
 
 sur_col_types
 
@@ -41,7 +44,7 @@ sql = paste0("CREATE TABLE IF NOT EXISTS highRewardTagsClaimed (
              ",\nPRIMARY KEY (\nrewardID\n))")
 
 dbExecute(con, sql)
-dbWriteTable(conn = con, "highRewardTagsClaimed", high_tags_claimed, row.names = F, append = T)
+dbWriteTable(conn = con, "highRewardTagsClaimed", high_tags_claimed_reduced, row.names = F, append = T)
 query <- "SELECT * FROM highRewardTagsClaimed"
 dbExecute(con = con, query)
 #querydelete<-"DROP TABLE surveyData"
