@@ -521,7 +521,7 @@ fishcaught <- fishcaught |>
 
 sur_col_types <- get_col_types(fishcaught)
 
-sur_col_types
+
 
 
 sur_col_types_sql <- sur_col_types |> 
@@ -531,7 +531,11 @@ sur_col_types_sql <- sur_col_types |>
   )) |> 
   dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
 
-
+sur_col_types_sql$a <- ifelse(
+  grepl("surveyNumber|fishID", sur_col_types_sql$a), 
+  sur_col_types_sql$a, 
+  sub(" .*", " TEXT", sur_col_types_sql$a)
+)
 
 sql = paste0("CREATE TABLE IF NOT EXISTS fishCaught (
        ",paste0(sur_col_types_sql$a,collapse = ",\n"),
