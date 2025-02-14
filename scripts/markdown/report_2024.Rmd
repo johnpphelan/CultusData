@@ -1,0 +1,28 @@
+---
+title: "Cultus lake suppression"
+author: "John Phelan"
+date: "2025-02-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+library(tidyverse)
+library(DBI)
+library(RSQLite)
+
+```
+
+```{r load_data}
+
+db_filepath = "output/CultusData.sqlite"
+
+con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
+
+DBI::dbListTables(con)
+
+
+
+```
+
