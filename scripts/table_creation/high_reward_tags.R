@@ -6,15 +6,15 @@ library(readxl)
 source("scripts/utils/col_types_f.R")
 source("scripts/utils/fix_col_names_f.R")
 
-lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/2024 projects/2024 Data/"
+lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/2024 projects/"
 
 db_filepath = "output/CultusData.sqlite"
 con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
 DBI::dbListTables(con)
 
-f_name<-paste0(lan_folder,"Survey_Data_Compiled-Nicole_Kaminski.xlsx")
-high_tags<-read_excel(path = f_name, sheet = "HighRewardTags", col_names = TRUE, skip = 2)
+f_name<-paste0(lan_folder,"High-Reward Tags/High_Reward_Tag_Dataset_2024.xlsx")
+high_tags<-read_excel(path = f_name, col_names = TRUE, skip = 2)
 
 high_tags <- high_tags |> 
   rename(date = Date, tagColor = `Tag Colour`, tagCode = `Tag Code`, fl_mm = `FL(mm)`,
