@@ -25,14 +25,16 @@ my_theme <- bslib::bs_theme(
   "sidebar-bg" = '#ADD8E7'
 )
 
-table_choices <- c("Scale aging", "Tag data", "Spring marking", "Nest data", "Angling Basok", "Angling derby", 
+table_choices <- c("Scale aging", "Acoustic tag data", "Spring marking", "Nest data", "Angling Basok", "Angling derby", 
                    "Recapture data", "Scale 500", "Sweltzer creek", "Creel - Fish Details", 
                    "Creel - Fishing Results", "Creel - Fisher Survey", "Creel - Shifts", "Creel - Weather Conditions", 
-                    "High reward tags", "High reward tags - claimed","Creel - Survey Responses")
+                    "High reward tags", "High reward tags - claimed","Creel - Survey Responses",
+                   "Creel - Survey Questions")
 table_choices<-sort(table_choices)
 
 creel_tables<-c("Creel - Fish Details","Creel - Fisher Survey", "Creel - Fishing Results","Creel - Shifts",
-                "Creel - Survey Responses","Creel - Weather Conditions")
+                "Creel - Survey Responses","Creel - Weather Conditions", "Creel - Survey Questions")
+creel_tables<-sort(creel_tables)
 
 table_col_search<-c("NA","pitTagNo")
 table_col_search <- sort(table_col_search)
@@ -73,7 +75,8 @@ ui <- page_sidebar(
   card(
     tabsetPanel(
       tabPanel("Selected Table",
-               div(style = "overflow-x: scroll; overflow-y: scroll;", DT::DTOutput("queried_table"))),
+               div(style = "overflow-x: scroll; overflow-y: scroll;", DT::DTOutput("queried_table"))
+               ),
       # New Tab for displaying the column names from the found tables
       tabPanel("Search By Column",
                
@@ -117,7 +120,7 @@ ui <- page_sidebar(
                
                downloadButton(
                  "download_creel_tables",
-                 "Download Creel Tables (.zip)",
+                 "Download Creel Tables (.xlsx)",
                  style = "color: #ffffff; background-color: #e67e22; border-color: #d35400;"
                )
       ),
@@ -195,6 +198,8 @@ server <- function(input, output, session) {
   
   #Depending on the human-readable table name chosen by the user, 
   # inform the SQL query that is performed.
+  
+  ######################################################################################################
   
   initial_query = reactive({
     # Find all columns in the queries_tbl that have an X for the table name that 
@@ -523,6 +528,8 @@ server <- function(input, output, session) {
     }
   })
   
+  
+  
   # Handle downloading of tables as a zip file
   output$download_filtered_tables <- downloadHandler(
     filename = function() {
@@ -556,9 +563,132 @@ server <- function(input, output, session) {
   )
  
   ##################################################################################
+  
+  # Reactive to get tables containing the selected column
+  selected_table_creel <- reactive({
+    req(input$Creel_selections)
+    
+    # Load queries and filter by selected tables
+    selected_query_tbl <- queries_tbl %>%
+      dplyr::filter(TableName %in% input$Creel_selections)
+    
+    # Create SQL queries for the selected tables
+    list_of_queries <- selected_query_tbl %>%
+      tidyr::pivot_longer(cols = -TableName) %>%
+      dplyr::filter(value == 'X') %>%
+      dplyr::mutate(query = paste0('SELECT * FROM ', name)) %>%
+      dplyr::pull(query)
+    
+    # Ensure it's a named list
+    list_of_queries <- setNames(as.list(list_of_queries), selected_query_tbl$TableName)
+    
+    list_of_queries
+  })
+  
+  
+  # Reactive to get tables containing the selected column
+  creel_joins <- reactive({
+    table_queries <- selected_table_creel()
+    
+    # Fetch data from database
+    table_data <- purrr::map(table_queries, ~ DBI::dbGetQuery(my_db, .x))
+    table_data <- as.list(table_data)
+    
+    # Debugging: Print which tables are fetched
+    print(names(table_data))
+    
+    # Check if creelSurveyQuestions and creelSurveyAnswers are selected
+    has_questions <- "Creel - Survey Questions" %in% names(table_data)
+    has_answers <- "Creel - Survey Answers" %in% names(table_data)
+    
+    # Handle creelSurveyQuestions & creelSurveyAnswers
+    if (has_questions & has_answers) {
+      # Properly join on questionID
+      questions_answers <- dplyr::inner_join(
+        table_data$`Creel - Survey Questions`,
+        table_data$`Creel - Survey Answers`,
+        by = "questionID"
+      )
+      table_data$questions_answers <- questions_answers
+      
+      # Remove original tables after joining
+      table_data <- table_data[!(names(table_data) %in% c("creelSurveyQuestions", "creelSurveyAnswers"))]
+    } else if (has_questions) {
+      # If only creelSurveyQuestions is selected, keep it
+      table_data$questions_answers <- table_data$`Creel - Survey Questions`
+      table_data <- table_data[!(names(table_data) %in% c("creelSurveyQuestions"))]
+    } else if (has_answers) {
+      # If only creelSurveyAnswers is selected, keep it
+      table_data$questions_answers <- table_data$`Creel - Survey Answers`
+      table_data <- table_data[!(names(table_data) %in% c("creelSurveyAnswers"))]
+    }
+    
+    # Join remaining tables on date and surveyNumber
+    remaining_tables <- table_data[names(table_data) != "questions_answers"]
+    valid_tables <- list()
+    for (tbl_name in names(remaining_tables)) {
+      df <- remaining_tables[[tbl_name]]
+      if (!is.data.frame(df) || nrow(df) == 0) next
+      if (all(c("date", "surveyNumber") %in% names(df))) {
+        valid_tables[[tbl_name]] <- df
+      }
+    }
+    
+    # Perform the join
+    if (length(valid_tables) == 1) {
+      creel_joined_data <- valid_tables[[1]]
+    } else if (length(valid_tables) > 1) {
+      creel_joined_data <- Reduce(function(df1, df2) {
+        dplyr::inner_join(df1, df2, by = c("date", "surveyNumber"), suffix = c(".x", ".y"))
+      }, valid_tables)
+    } else {
+      creel_joined_data <- NULL
+    }
+    
+    # If questions_answers exists, merge it properly
+    if ("questions_answers" %in% names(table_data)) {
+      if (is.null(creel_joined_data)) {
+        creel_joined_data <- table_data$questions_answers
+      } else {
+        # Properly join, don't just append!
+        creel_joined_data <- dplyr::full_join(creel_joined_data, table_data$questions_answers, by = "questionID")
+      }
+    }
+    
+    # Handle empty case
+    if (is.null(creel_joined_data)) {
+      creel_joined_data <- data.frame(Message = "No Data Available")
+    }
+    return(creel_joined_data)
+  })
+  
+  
+  output$creel_joined_tables <- DT::renderDT({
+    
+    creel_data_dynamic<-creel_joins()
+    
+    # Render DataTable
+    DT::datatable(creel_data_dynamic, options = list(scrollX = TRUE, scrollY = TRUE))
+    
+  })
+
+  # Handle downloading of tables as a zip file
+  output$download_creel_tables <- downloadHandler(
+    filename = function() {
+      paste0('Cultus_Lake_Creel_Survey_Joins.xlsx')
+    },
+    content = function(file) {
+      openxlsx::write.xlsx(creel_joins(), file)
+    }
+  )
+  
+  
+  
+  
+  ###################################################################################
   output$my_leaf = renderLeaflet({
     
-    # if(input$table_name == "nestRaw") browser()
+    
     bc = bcmaps::bc_bound() |> sf::st_transform(4326)
     l = leaflet() |> 
       addTiles() |> 
