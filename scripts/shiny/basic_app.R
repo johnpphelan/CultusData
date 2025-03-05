@@ -428,6 +428,23 @@ server <- function(input, output, session) {
       }
     }
     
+    
+    curr_table = queries_tbl[queries_tbl$TableName == input$table_name,]
+    
+    if (curr_table$TableName == "Scale aging") {
+
+      output <- tryCatch({
+        output |> 
+          dplyr::filter(!detailedNames %in% c("start_time", "end_time")) |>  
+          dplyr::select(-ageType) |>  
+          tidyr::pivot_wider(names_from = detailedNames, values_from = result)
+      },
+      error = function(e) {
+        message("Pivoting failed: ", e$message)
+        return(output)  # Return original data if an error occurs
+      })
+    }
+
     output
   })
   
@@ -455,6 +472,7 @@ server <- function(input, output, session) {
   # })
   
   output$queried_table = DT::renderDT({
+    
     final_table()
   })
   
@@ -639,7 +657,7 @@ server <- function(input, output, session) {
       creel_joined_data <- valid_tables[[1]]
     } else if (length(valid_tables) > 1) {
       creel_joined_data <- Reduce(function(df1, df2) {
-        dplyr::inner_join(df1, df2, by = c("date", "surveyNumber"), suffix = c(".x", ".y"))
+        dplyr::full_join(df1, df2, by = c("date", "surveyNumber"), suffix = c(".x", ".y"))
       }, valid_tables)
     } else {
       creel_joined_data <- NULL
