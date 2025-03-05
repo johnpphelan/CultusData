@@ -11,12 +11,20 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 library(tidyverse)
 library(DBI)
 library(RSQLite)
+library(sf)
+library(osmdata)
+library(knitr)
+library(kableExtra)
+library(patchwork)
+library(bcdata)
 
 ```
 
+# Cultus Lake data exploration {.tabset}
+
 ```{r load_data}
 
-db_filepath = "output/CultusData.sqlite"
+db_filepath = "scripts/shiny/www/CultusData.sqlite"
 
 con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
@@ -25,4 +33,534 @@ DBI::dbListTables(con)
 
 
 ```
+
+## Abundance Capture data {.tabset}
+
+
+
+```{r explore_abundance_capture}
+
+query <- "SELECT * FROM abundanceCapture"
+dbExecute(con = con, query)
+#querydelete<-"DROP TABLE surveyData"
+result <- dbSendQuery(conn = con, query)
+abundance<-fetch(result, -1)
+dbClearResult(result)
+
+ 
+#get males and females
+abundanceMF <- abundance |> 
+  filter(sex == "M" | sex == "F")
+
+# get undetermined
+abundanceU<- abundance |> 
+  filter(sex == "U" | is.na(sex)) |> 
+  mutate(sex = "U")
+
+
+recaptured<- abundance |> 
+  filter(!is.na(Recap))
+
+
+
+
+```
+
+### Seconds of Electricity used
+
+```{r plot_elect}
+ggplot(data = abundance) +
+  geom_histogram(aes(SecondsElectricity), bins = 30, fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(
+    title = "Distribution of Seconds Electricity",
+    x = "Seconds of Electricity Used",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14, face = "bold")
+  )
+
+```
+
+### Males vs females and unsexed fish
+
+The proportion of males/females and unsexed captured. Split by the method of capture. A, E and F. 
+```{r plot MvFvU}
+sexed<-ggplot(data = abundanceMF) +
+  geom_histogram(aes(length, colour = sex, fill = sex), position = "identity",  alpha = 0.4)+
+  ggtitle(paste0("Percentage of sexed fish: ",(round(nrow(abundanceMF)/nrow(abundance)*100, 2))))+
+  #facet_wrap(~ Method)+
+  facet_grid(~ Method)+
+  theme_minimal()
+
+unsexed<-ggplot(data = abundanceU)+
+  geom_histogram(aes(length, fill = sex), alpha = 0.4)+
+  ggtitle(paste0("Percentage of unsexed fish: ",(round(nrow(abundanceU)/nrow(abundance)*100, 2))))+
+  scale_fill_manual(values = "blue")+
+  facet_grid(~ Method)+
+  theme_minimal()
+
+sexed + unsexed
+
+```
+
+
+
+
+## Angling data - Basok {.tabset}
+
+```{r explore_AnglingBasok}
+
+
+query <- "SELECT * FROM anglingCapBasok"
+dbExecute(con = con, query)
+#querydelete<-"DROP TABLE surveyData"
+result <- dbSendQuery(conn = con, query)
+angBas<-fetch(result, -1)
+dbClearResult(result)
+
+summary(angBas)
+
+```
+
+
+### Fish length
+
+```{r length_basok}
+
+ggplot(angBas)+
+  geom_histogram(aes(length), position = "identity",  alpha = 0.4)+
+  #ggtitle(paste0("Percentage of sexed fish: ",(round(nrow(abundanceMF)/nrow(abundance)*100, 2))))+
+  facet_wrap(~ location)+
+  theme_minimal()
+
+```
+
+### Fish weight
+
+```{r weight_basok}
+ggplot(angBas)+
+  geom_histogram(aes(weight), position = "identity",  alpha = 0.4)+
+  #ggtitle(paste0("Percentage of sexed fish: ",(round(nrow(abundanceMF)/nrow(abundance)*100, 2))))+
+  facet_wrap(~ location)+
+  theme_minimal()
+```
+
+
+
+
+## Angling derby data {.tabset}
+
+```{r explore_anglingDerby}
+
+query <- "SELECT * FROM anglingDerby"
+dbExecute(con = con, query)
+#querydelete<-"DROP TABLE surveyData"
+result <- dbSendQuery(conn = con, query)
+angDerby<-fetch(result, -1)
+dbClearResult(result)
+
+
+
+ggplot(angDerby)+
+  geom_histogram(aes(length), position = "identity",  alpha = 0.4)+
+  #ggtitle(paste0("Percentage of sexed fish: ",(round(nrow(abundanceMF)/nrow(abundance)*100, 2))))+
+  facet_wrap(~ location)+
+  theme_minimal()
+
+ggplot(angDerby)+
+  geom_histogram(aes(weight), position = "identity",  alpha = 0.4)+
+  #ggtitle(paste0("Percentage of sexed fish: ",(round(nrow(abundanceMF)/nrow(abundance)*100, 2))))+
+  facet_wrap(~ location)+
+  theme_minimal()
+
+```
+
+### Length of fish from Angling derby
+
+
+```{r L_derby}
+
+length<-ggplot(angDerby)+
+  geom_histogram(aes(length), position = "identity",  alpha = 0.4)+
+  #ggtitle(paste0("Percentage of sexed fish: ",(round(nrow(abundanceMF)/nrow(abundance)*100, 2))))+
+  facet_wrap(~ location)+
+  theme_minimal()
+
+length 
+
+```
+
+### Weight of fish from Angling derby
+
+```{r}
+weight<-ggplot(angDerby)+
+  geom_histogram(aes(weight), position = "identity",  alpha = 0.4)+
+  #ggtitle(paste0("Percentage of sexed fish: ",(round(nrow(abundanceMF)/nrow(abundance)*100, 2))))+
+  facet_wrap(~ location)+
+  theme_minimal()
+```
+
+
+## Nest Data {.tabset}
+
+```{r explore_nestRaw }
+
+query <- "SELECT * FROM nestRaw"
+dbExecute(con = con, query)
+#querydelete<-"DROP TABLE surveyData"
+result <- dbSendQuery(conn = con, query)
+nestRaw<-fetch(result, -1)
+dbClearResult(result)
+
+
+nestRaw<- nestRaw |> 
+  mutate(lifeStage = if_else(lifeStage == "n/a", "N", lifeStage),
+         lifeStage = if_else(lifeStage == "no", "N", lifeStage),
+         lifeStage = if_else(lifeStage == "empty", "N", lifeStage),
+         lifeStage = if_else(is.na(lifeStage), "N", lifeStage)
+         )
+
+
+
+test<-nestRaw |> 
+  mutate(activityCompleted = str_replace(activityCompleted, "\\.\\.","\\."),
+         activityCompleted = str_replace(activityCompleted, "\\.*",""),
+         activityCompleted = str_replace(activityCompleted, "\\. \\.*","\\."),
+         trimws(activityCompleted)
+         )
+
+
+
+
+```
+
+### Nest depth
+
+```{r nestDepth}
+ggplot(nestRaw)+
+  geom_histogram(aes(depth), position = "identity",  alpha = 0.4)+
+  #ggtitle(paste0("Percentage of sexed fish: ",(round(nrow(abundanceMF)/nrow(abundance)*100, 2))))+
+  theme_minimal()
+```
+
+### Guarding males on nests
+
+```{r guarding}
+ggplot(nestRaw)+
+    geom_histogram(aes(guarding), stat = "count", position = "identity",  alpha = 0.4)+
+  #ggtitle(paste0("Percentage of sexed fish: ",(round(nrow(abundanceMF)/nrow(abundance)*100, 2))))+
+  theme_minimal()
+
+```
+
+### Life stages seen at the nests
+
+```{r lifeStages}
+ggplot(nestRaw)+
+  geom_bar(aes(lifeStage))+
+  theme_minimal()
+
+```
+
+### What was done to the nests?
+
+```{r activities}
+ggplot(nestRaw)+
+  geom_bar(aes(activityCompleted))+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+
+
+
+## Recapture Data {.tabset}
+
+```{r explore_recapture}
+query <- "SELECT * FROM recapture"
+dbExecute(con = con, query)
+#querydelete<-"DROP TABLE surveyData"
+result <- dbSendQuery(conn = con, query)
+recap<-fetch(result, -1)
+dbClearResult(result)
+
+recap <- recap |>
+  mutate(startTime = hms::parse_hm(startTime),
+         endTime = hms::parse_hm(endTime),
+         hours_fished = as.numeric(difftime(endTime, startTime, units = "hours")))
+
+recap_counts <- recap |> 
+  group_by(date, location) |> 
+  summarise(fish_caught = n())
+
+
+
+
+```
+
+### Length vs Weight
+
+```{r length vs weight}
+ggplot(data = recap)+
+  geom_point(aes(x = weight, y= length))
+```
+
+### Histogram - length
+
+```{r lengthHist}
+ggplot(recap, aes(x = length)) +
+  geom_histogram(binwidth = 10, fill = "blue", alpha = 0.5, boundary = 0) +
+  scale_x_continuous(breaks = seq(0, max(recap$length, na.rm = TRUE), by = 50)) +
+  theme_minimal() +
+  labs(title = "Distribution of Fish Length", x = "Length (mm)", y = "Count")
+```
+
+### Histogram - weight
+
+```{r weightHist}
+ggplot(recap, aes(x = weight)) +
+  geom_histogram(binwidth = 50, fill = "blue", alpha = 0.5, boundary = 0) +
+  scale_x_continuous(breaks = seq(0, max(recap$weight, na.rm = TRUE), by = 50)) +
+  theme_minimal() +
+  labs(title = "Distribution of Fish Weight", x = "Weight (g)", y = "Count")
+```
+
+### Catch per location
+
+```{r catchLocation}
+ggplot(recap, aes(x = location)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Number of Fish Caught per Location", x = "Location", y = "Count")
+
+```
+
+### Date vs fish caught
+
+```{r fishCaught}
+ggplot(recap, aes(x = length, y = weight)) +
+  geom_point(alpha = 0.6) +
+  theme_minimal() +
+  labs(title = "Fish Length vs. Weight",
+       x = "Length (mm)",
+       y = "Weight (g)")
+```
+
+
+
+
+## Tag Data {.tabset}
+
+```{r explore_tags}
+
+query <- "SELECT * FROM tagData"
+dbExecute(con = con, query)
+result <- dbSendQuery(conn = con, query)
+tags<-fetch(result, -1)
+dbClearResult(result)
+
+
+tags_sf <- sf::st_as_sf(tags, coords = c("longitude", "latitude"), crs = 4326)
+
+#tags_sf<-st_make_valid(tags_sf)
+bc<-bcmaps::bc_bound()
+
+
+
+tags_grouped <- tags_sf |> 
+  group_by(stationName) |> 
+  summarise(n = n())
+
+cultus_bbox<-st_bbox(tags_grouped)
+
+
+waterbodies<-readRDS("./data/named_lakes_and_rivers.rds")
+cultus<-waterbodies[waterbodies$waterbody == "Cultus Lake",]
+cultus<-cultus[1,]
+buffered_cultus <- st_buffer(cultus, dist = 1000)  
+bbox <- st_bbox(buffered_cultus)
+
+
+
+tags$hour <- hour(hms(tags$time))
+
+
+
+```
+
+### Detections by station 
+
+```{r}
+
+stationLocs<-ggplot()+
+  geom_sf(data = cultus, color = "darkgrey", fill = NA)+
+  geom_sf(data = tags_grouped, aes(size = n, colour = stationName), inherit.aes = FALSE)+
+  # geom_text(data = tags_grouped, aes(label = n, geometry = geometry), 
+  #           stat = "sf_coordinates", nudge_y = 200, size = 3) + 
+  coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]), ylim = c(bbox["ymin"], bbox["ymax"])) +
+  theme_minimal()
+
+detecByLoc<-tags_sf |> 
+  count(stationName) |> 
+  ggplot(aes(x = reorder(stationName, -n), y = n)) +
+  geom_col(fill = "steelblue", color = "black") +
+  theme_minimal() +
+  labs(title = "Detection Counts at Stations", x = "Stations", y = "Count") +
+  coord_flip()
+
+stationLocs 
+
+detecByLoc
+
+```
+
+### Detections by date
+
+```{r detecDates}
+ggplot(tags, aes(x = as.Date(date))) +
+  geom_histogram(binwidth = 1, fill = "steelblue", color = "black") +
+  theme_minimal() +
+  labs(title = "Detections Over Time", x = "Date", y = "Count")
+
+```
+
+### Detections by hour
+
+```{r detecHours}
+ggplot(tags, aes(x = hour)) +
+  geom_histogram(binwidth = 1, fill = "steelblue", color = "black") +
+  theme_minimal() +
+  labs(title = "Detections by Hour of Day", x = "Hour", y = "Count")
+```
+
+### Transmitter counts
+
+```{r transmitterCounts}
+tags_sf |> 
+  count(transmitter) |> 
+  ggplot(aes(x = reorder(transmitter, -n), y = n)) +
+  geom_col(fill = "steelblue", color = "black") +
+  theme_minimal() +
+  labs(title = "Detection Counts per Transmitter", x = "Transmitter", y = "Count") +
+  coord_flip()
+```
+
+### Transmitter by receiver
+
+```{r}
+  ggplot(tags_sf, aes(x = stationName, y = transmitter)) +
+    geom_tile(aes(fill = ..count..), stat = "bin2d") +
+    scale_fill_viridis_c() +
+    theme_minimal() +
+    labs(title = "Frequency of Transmitter Detections at Receivers",
+         x = "Receiver",
+         y = "Trasmitter",
+         fill = "Count")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Creel Survey {.tabset}
+
+```{r get_creel_data}
+query <- "SELECT * FROM creelFishDetails"
+dbExecute(con = con, query)
+result <- dbSendQuery(conn = con, query)
+creelFishDetails<-fetch(result, -1)
+dbClearResult(result)
+
+query <- "SELECT * FROM creelFishResults"
+dbExecute(con = con, query)
+result <- dbSendQuery(conn = con, query)
+creelFishResults<-fetch(result, -1)
+dbClearResult(result)
+
+query <- "SELECT * FROM creelFisherDemography"
+dbExecute(con = con, query)
+result <- dbSendQuery(conn = con, query)
+creelFisherDemography<-fetch(result, -1)
+dbClearResult(result)
+
+query <- "SELECT * FROM creelShifts"
+dbExecute(con = con, query)
+result <- dbSendQuery(conn = con, query)
+creelShifts<-fetch(result, -1)
+dbClearResult(result)
+
+query <- "SELECT * FROM creelSurveyAnswers"
+dbExecute(con = con, query)
+result <- dbSendQuery(conn = con, query)
+creelSurveyAnswers<-fetch(result, -1)
+dbClearResult(result)
+
+query <- "SELECT * FROM creelSurveyQuestions"
+dbExecute(con = con, query)
+result <- dbSendQuery(conn = con, query)
+creelSurveyQuestions<-fetch(result, -1)
+dbClearResult(result)
+
+query <- "SELECT * FROM creelWeather"
+dbExecute(con = con, query)
+result <- dbSendQuery(conn = con, query)
+creelWeather<-fetch(result, -1)
+dbClearResult(result)
+
+
+```
+
+### Creel Shifts
+
+```{r creel_shift_starts}
+creelShifts %>%
+  group_by(surveyor) %>%
+  summarize(total_hours = sum(hours_worked)) %>%
+  ggplot(aes(x = reorder(surveyor, -total_hours), y = total_hours, fill = surveyor)) + 
+  geom_col() + 
+  coord_flip() + 
+  theme_minimal() + 
+  labs(title = "Total Hours Worked by Surveyor", x = "Surveyor", y = "Total Hours")
+
+ggplot(creelShifts, aes(x = as.integer(hours_worked))) +  # Ensure integer values
+  geom_bar(fill = "orange", alpha = 0.6) + 
+  scale_x_continuous(breaks = seq(min(creelShifts$hours_worked, na.rm = TRUE), 
+                                  max(creelShifts$hours_worked, na.rm = TRUE), 
+                                  by = 1)) +  # Ensure each integer has a tick mark
+  theme_minimal() + 
+  labs(title = "Distribution of Hours Worked per Shift", x = "Hours Worked", y = "Count")
+
+```
+
+
+```{r creelFishingResults}
+
+summary(creelFishResults)
+
+merged_data<- creelFishResults |> 
+  left_join(creelFisherDemography, by = c("date", "surveyNumber"))
+
+merged_data_2<- merged_data |> 
+  left_join(creelFishDetails, by = c("date", "surveyNumber"))
+
+
+
+creel_survey_responses<- creelSurveyAnswers |> 
+  left_join(creelSurveyQuestions, by = "questionID")
+
+wideanswers<- creel_survey_responses |> 
+  select(-questionID) |> 
+  pivot_wider(names_from = question, values_from = answer)
+# 
+# merged_big<- merged_data_2 |> 
+#   left_join(creelSurveyAnswers, by = c("date", "surveyNumber"))
+# 
+# merged_big <- merged_big |>
+#   left_join(creelSurveyQuestions, by = "questionID")
+
+
+```
+
+
 
