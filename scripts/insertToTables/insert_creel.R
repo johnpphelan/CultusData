@@ -221,7 +221,7 @@ df
 dbClearResult(result)
 
 answersTable<- creelData |> 
-  select(c(Survey_No, Time,Date, contains(df$question)))
+  select(c(Survey_No, Time, Date, contains(df$question)))
 
 
 answersLong <- answersTable |>
@@ -241,9 +241,9 @@ answersLong<- answersLong |>
   mutate(date = as.Date(date)) |> 
   arrange(date) |> 
   mutate(date_group = cumsum(date != lag(date, default = first(date)))) |> 
-  group_by(date_group) |> 
-  mutate(surveyNumber = row_number()) |>  
-  ungroup() |> 
+  # group_by(date_group) |> 
+  # mutate(surveyNumber = row_number()) |>  
+  # ungroup() |> 
   select(-date_group) |> 
   mutate(date = as.character(date))
 
