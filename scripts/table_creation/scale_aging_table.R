@@ -47,7 +47,8 @@ scaleDataRaw<- scaleDataRaw |>
   mutate(date = as.character(date),
          start_time = as.character(start_time),
          end_time = as.character(end_time)) |> 
-  rename(lenth = length_mm)
+  rename(length = length_mm) |> 
+  rename(pitTagNo = pit_tag, acousticTagNo = acoustic_tag)
   
 
   
@@ -104,7 +105,8 @@ col_types<-get_col_types(scale500)
 
 
 scale500<- scale500 |> 
-  mutate(date = as.character(date))
+  mutate(date = as.character(date)) |> 
+  rename(acousticTagNo = AcousticTag, pitTagNo = Pittag)
 
 
 sur_col_types_sql <- col_types |> 
