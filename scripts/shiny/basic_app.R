@@ -25,61 +25,116 @@ my_theme <- bslib::bs_theme(
   "sidebar-bg" = '#ADD8E7'
 )
 
-table_choices <- c("Scale aging", "Acoustic tag data", "Spring marking", "Nest data", "Angling Basok", "Angling derby", 
+creelMetadataBox <- function(title, keys, fields) {
+  HTML(sprintf(
+    "<div class='container' style='background-color: #f8f9fa; padding: 15px; border-radius: 8px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1);'>
+      <h4 style='color: #34495e; font-weight: bold; border-bottom: 2px solid #3498db; padding-bottom: 5px;'>%s</h4>
+      <p><strong>Keys:</strong> <span style='color: #3498db;'>%s</span></p>
+      <p><strong>Contents:</strong></p>
+      <ul style='list-style-type: none; padding-left: 10px;'>%s</ul>
+    </div>",
+    title,
+    keys,
+    paste(sprintf(
+      "<li><strong title='%s' style='cursor: help;'>%s</strong></li>",
+      names(fields),
+      unname(fields)
+    ), collapse = "\n")
+  ))
+}
+
+table_choices <- c("Scale aging", "Acoustic tag data", "Electrofishing", "Nest data", "Angling Basok", "Angling derby", 
                    "Recapture data", "Scale 500", "Sweltzer creek", "Creel - Fish Details", 
                    "Creel - Fishing Results", "Creel - Fisher Survey", "Creel - Shifts", "Creel - Weather Conditions", 
                     "High reward tags", "High reward tags - claimed","Creel - Survey Responses",
-                   "Creel - Survey Questions")
+                   "Creel - Survey Questions", "Temperature - Shore", "Temperature - CLASS")
 table_choices<-sort(table_choices)
 
 creel_tables<-c("Creel - Fish Details","Creel - Fisher Survey", "Creel - Fishing Results","Creel - Shifts",
                 "Creel - Survey Responses","Creel - Weather Conditions", "Creel - Survey Questions")
 creel_tables<-sort(creel_tables)
 
-table_col_search<-c("NA","pitTagNo")
+table_col_search<-c("NA","pitTagNo", "transmitter", "receiver", "stationName", "receiver_name", "location", "acousticTagNo", "length", "weight", "tagID", "ScaleBookNo")
 table_col_search <- sort(table_col_search)
+
+
+template_list<-c("Abundance estiamte" = "", "angling Basok and Buck", "Angling Derby", "High Reward Tags", "High Reward Tags Claimed",
+                 "Nest Data", "scale 500", "Scale Aging", "Spring Marking", "Sweltzer Creek", "Tag Data", "Scale Column Name Key")
+
 # Add a logout button container to the UI
 ui <- page_sidebar(
+  
+  # add a css here and make the styling percentage based
+  # 
+  includeCSS("www/style.css"),
+  
   title = tags$div(
-    style = "display: flex; justify-content: space-between; align-items: center; width: 100%;",
-    # Left: App Title
-    tags$span("Cultus Lake - Data", style = "font-size: 20px; font-weight: bold;"),
-    # Right: Logout Button
+    class = "page-title-bar",
+    tags$span("Cultus Lake - Data", class = "title-text"),
     div(
       uiOutput("logout_ui"),
-      style = "margin-left: auto;"  # Pushes the logout button to the far right
+      class = "logout-button"
     )
   ),
+  
+  
   sidebar = sidebar(
-    pickerInput(
-      inputId = "table_name",
-      label = "Select table",
-      selected = 'Tag data',
-      choices = c(table_choices),
-      multiple = FALSE,
-      options = pickerOptions(liveSearch = TRUE)
+    div(
+    div(
+      pickerInput(
+        inputId = "table_name",
+        label = "Select table",
+        selected = 'Nest data',
+        choices = c(table_choices),
+        multiple = FALSE,
+        options = pickerOptions(liveSearch = TRUE)
+      ),
+      class = "picker-input"
     ),
-    uiOutput('date_filter'),
-    
+    div(
+      uiOutput('date_filter'),
+      class = "date-filter"    
+    ),
     uiOutput("dynamicFilter"),
-    bslib::layout_column_wrap(
-      width = 1,
-      downloadButton(
-        "download_xlsx",
-        "Download file (.xlsx)",
-        style = "color: #ffffff; background-color: #27ae22; border-color: #277c24;"
-      )
+    
     )
   ),
   theme = my_theme,
+  
+  tags$script(HTML('
+  $(document).ready(function(){
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll("[data-bs-toggle=\'tooltip\']"));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+  });
+')),
+  
+  
   card(
     tabsetPanel(
+        
       tabPanel("Selected Table",
-               div(style = "overflow-x: scroll; overflow-y: scroll;", DT::DTOutput("queried_table"))
-               ),
+               downloadButton(
+                 class = "download-button",
+                 "download_xlsx",
+                 "Download file (.xlsx)"),
+               div(class = "main-table",
+                   DT::DTOutput("queried_table")
+               )
+      ),
+      
       # New Tab for displaying the column names from the found tables
       tabPanel("Search By Column",
-               
+               div(
+                 class = "column-search-header",
+                 p("This finds the selected column name across")
+               ),
+               downloadButton(
+                 class = "download-button",
+                 "download_filtered_tables",
+                 "Download Tables (.zip)"
+               ),
                pickerInput(
                  inputId = "column_name",
                  label = "Select column to search",
@@ -89,13 +144,9 @@ ui <- page_sidebar(
                  options = pickerOptions((liveSearch = TRUE))
                ),
                
-               uiOutput("columns_in_selected_tables"),
+               uiOutput("columns_in_selected_tables")
                
-               downloadButton(
-                 "download_filtered_tables",
-                 "Download Tables (.zip)",
-                 style = "color: #ffffff; background-color: #e67e22; border-color: #d35400;"
-               )
+               
       ),
   
       # How will this look?
@@ -112,35 +163,140 @@ ui <- page_sidebar(
                  multiple = TRUE,
                  options =list(create = TRUE)
                ),
-               
-               #we need to join the tables in the server, then display them!
-               div(style = "overflow-x: scroll; overflow-y: scroll;", DT::DTOutput("creel_joined_tables")),
-               
-               uiOutput("selected_creel_tables"),
-               
                downloadButton(
+                 class = "download-button",
                  "download_creel_tables",
-                 "Download Creel Tables (.xlsx)",
-                 style = "color: #ffffff; background-color: #e67e22; border-color: #d35400;"
-               )
+                 "Download Creel Tables (.xlsx)"
+               ),
+               #we need to join the tables in the server, then display them!
+               div(class = "main-table", DT::DTOutput("creel_joined_tables")),
+               
+               uiOutput("selected_creel_tables")
       ),
       
       tabPanel("Metadata",
-               tabsetPanel(
-                 tabPanel("Creel - All",
-                          img(src = "Creel - All.png", width = 1200, height = 600, alt = "Creel - All")
-                 ),
-                 tabPanel("Creel - Detailed",
-                          img(src = "Creel - Detailed.png", width = 1200, height = 600, alt = "Creel - Detailed")
-                 ),
-                 tabPanel("Creel - Angler Info",
-                          img(src = "Creel - Angler Info.png", width = 1000, height = 600, alt = "Creel - Angler Info")
-                 ),
-                 tabPanel("Creel - Survey Response",
-                          img(src = "Creel - Survey Response.png", width = 1000, height = 600, alt = "Creel - Survey Response")
+               div(
+                 class = "metadata-header",
+                 tagList(
+                   p("Each tab contains a list and descriptor for each column in the current tables."),
+                   p("The unique key(s) for each table is listed."),
+                   p("Hover over the column names to find a description for that specific column.")
                  )
+               ),
+               tabsetPanel(
+                 tabPanel("Creel - Shifts",
+                          creelMetadataBox(
+                            title = "Creel - Shifts",
+                            keys = "date, survey number",
+                            fields = c(
+                              "Date of the survey" = "Date",
+                              "Unique ID for the survey" = "Survey number",
+                              "Person conducting the survey" = "Surveyor",
+                              "Time the shift started" = "Shift start time",
+                              "Time the shift ended" = "Shift end time",
+                              "Total hours worked during the shift" = "Hours worked"
+                            )
+                          )
+                 ),
+                 tabPanel("Creel - Fish Details",
+                          creelMetadataBox(
+                            title = "Creel - Fish Details",
+                            keys = "date, survey number, Fish ID",
+                            fields = c(
+                              "Unique ID for the record" = "Survey number",
+                              "Date of record" = "Date",
+                              "Time of record" = "Time",
+                              "Fish number caught on the current date" = "Fish No",
+                              "Species of the fish caught" = "Spp",
+                              "Length of fish in mm" = "length",
+                              "Weight of fish in g" = "weight",
+                              "Pit tag number, if present" = "PitTagNo",
+                              "Notes/comments from operator" = "notes",
+                              "Unique fish ID, independent of date" = "fishID",
+                              "Acoustic tag number, if present" = "acousticTagNo"
+                            )
+                          )
+                 ),
+                 
+                 tabPanel("Creel - Fish Results",
+                          creelMetadataBox(
+                            title = "Creel - Fish Results",
+                            keys = "date, survey number",
+                            fields = c(
+                              "Unique ID for the record" = "Survey number",
+                              "Date of record" = "Date",
+                              "Time of record" = "Time",
+                              "Total number of fish caught (may be released)" = "totCaught",
+                              "Total number of fish retained" = "totRetained",
+                              "Total number of small mouth bass caught" = "noSMBc",
+                              "Total number of sockeye salmon(?) caught" = "NoKOc",
+                              "Total number of cutthroat trout caught" = "NoCTc",
+                              "Total number of rainbow trout caught" = "NoRBc",
+                              "Total number of bull trout caught" = "NoBTc",
+                              "Total number of lake trout caught" = "NoLTc",
+                              "Total number of other species caught" = "NoOtherSppc",
+                              "Total number of small mouth bass retained" = "noSMBr",
+                              "Total number of sockeye salmon(?) retained" = "NoKOr",
+                              "Total number of cutthroat trout retained" = "NoCTr",
+                              "Total number of rainbow trout retained" = "NoRBr",
+                              "Total number of bull trout retained" = "NoBTr",
+                              "Total number of lake trout retained" = "NoLTr",
+                              "Total number of other species retained" = "NoOtherSppr",
+                              "Why did the angler release any of the fish caught" = "releaseReason",
+                              "Hours fished per person" = "personHours",
+                              "Number of anglers in the group" = "noAnglers",
+                              "Number of rods being used" = "noRods",
+                              "Where were the anglers fishing (dock or boat etc)" = "vessl",
+                              "Preferred species for angling" = "preferredSpp",
+                              "Where was the survey conducted" = "site"
+                            )
+                          )
+                 ),
+                 
+                 tabPanel("Creel - Fisher Survey",
+                          creelMetadataBox(
+                            title = "Creel - Fisher Survey",
+                            keys = "date, survey number, anglerID",
+                            fields = c(
+                              "Date of the survey" = "Date",
+                              "Unique ID for the survey" = "Survey number",
+                              "Time of survey" = "time",
+                              "Reported gender" = "gender",
+                              "Age category of participant" = "AgeClass",
+                              "Type of fishing license held" = "licensePeriod",
+                              "Resident of Canada?" = "residency",
+                              "Where the participant is from" = "cityProvienceCountry",
+                              "Post code" = "Post Code",
+                              "Other information provided" = "notes",
+                              "Unique ID for angler" = "AnglerID"
+                            )
+                          )
+                 ),
                )
       ),
+      
+      
+      tabPanel("Download template forms",
+               div(
+                 class = "under-construction",
+                 p("Under construction!"),
+               ),
+               card(
+                 selectizeInput(
+                   inputId = "template_selection",
+                   label = "Select template to download",
+                   choices = template_list,
+                   multiple = TRUE,
+                   options =list(create = TRUE)
+                 ),
+               ),
+                 downloadButton(
+                   class = "download-button",
+                   "download_template",
+                   "Download template (.csv)"
+                 )
+      ),
+                 
       tabPanel("Contact",
                card(
                  a(
@@ -150,9 +306,13 @@ ui <- page_sidebar(
                  )
                )
       )
+      
+      
     )
   ),
 )
+
+
 
 # Secure the app using shinymanager
 ui <- secure_app(ui)
@@ -225,14 +385,7 @@ server <- function(input, output, session) {
     }) |> 
       purrr::reduce(dplyr::left_join)
     
-    # Ensure that the time and date columns are in the proper format!
-    # if('time' %in% names(merged_data)){
-    #   merged_data = merged_data |> 
-    #     dplyr::mutate(time = dplyr::case_when(
-    #       stringr::str_detect(time, ':[0-9]{2}$') ~ lubridate::ymd_hms(time),
-    #       T ~ lubridate::ymd(time)
-    #     ))
-    # }
+    
     if('date' %in% names(merged_data)){
       merged_data$date = lubridate::ymd(merged_data$date)
     }
@@ -243,22 +396,6 @@ server <- function(input, output, session) {
     merged_data
   })
   
-  
-  
-  # We may want an additional set of filters based on WHAT columns our table has...
-  # To do this, we could dynamically render new UI pieces based on our server script.
-  # output$conditional_time_filter = renderUI({
-  #   if(!'time' %in% names(queried_tbl())) return(NULL)
-  #   if('time' %in% names(queried_tbl())){
-  #     shiny::sliderInput(
-  #       inputId = 'tbl_time_filter',
-  #       label = 'Time',
-  #       min = min(queried_tbl()$time, na.rm=T),
-  #       max = max(queried_tbl()$time, na.rm=T),
-  #       value = c(min(queried_tbl()$time, na.rm=T),max(queried_tbl()$time, na.rm=T))
-  #     )
-  #   }
-  # })
   
   output$date_filter = renderUI({
     if (!'date' %in% names(queried_tbl())) return(NULL)
@@ -293,35 +430,6 @@ server <- function(input, output, session) {
     }
   })
   
-  # output$dynamicFilter = renderUI({
-  #   # Get the current table
-  #   table_data <- queried_tbl()
-  #   
-  #   # Return NULL if the table is empty
-  #   if (nrow(table_data) == 0) return(NULL)
-  #   
-  #   # Find columns with 10 or fewer non-NA unique values
-  #   cols_to_filter <- names(table_data)[sapply(table_data, function(col) {
-  #     unique_vals <- unique(col[!is.na(col)]) # Exclude NA values
-  #     length(unique_vals) > 0 && length(unique_vals) <= 10
-  #   })]
-  #   
-  #   # If no columns qualify, return NULL
-  #   if (length(cols_to_filter) == 0) return(NULL)
-  #   
-  #   # Create dropdowns for each qualifying column
-  #   tagList(
-  #     lapply(cols_to_filter, function(col) {
-  #       selectizeInput(
-  #         inputId = paste0(col, "_filter"),
-  #         label = paste("Filter by", col),
-  #         choices = NULL, # Choices will be populated dynamically
-  #         selected = NULL,
-  #         multiple = TRUE
-  #       )
-  #     })
-  #   )
-  # })
   
 
   output$dynamicFilter = renderUI({
@@ -381,17 +489,7 @@ server <- function(input, output, session) {
       )
     }
   })
-  
-  # output$conditional_age_class = renderUI({
-  #   if(!'AgeClass' %in% names(queried_tbl())) return(NULL)
-  #   if('AgeClass' %in% names(queried_tbl())){
-  #     shinyWidgets::pickerInput(
-  #       inputID = 'ageClass',
-  #       label = 'Age group',
-  #       multiple = TRUE,
-  #       choices = (unique(queried_tbl$ageClass))
-  #     )}
-  # })
+
   
   final_table = reactive({
     output = queried_tbl()
@@ -448,15 +546,6 @@ server <- function(input, output, session) {
     output
   })
   
- 
-  
-  
-  
-  # names(testytest) = stringr::str_extract(initial_query,'[a-zA-Z]+$')
-  # dplyr::full_join(testytest$surveyQuestions,testytest$surveyAnswers)
-  # purrr::reduce(dplyr::full_join)
-  
-  
   
   # If we are wanting to respond to user inputs, we use inputs 
   # in the UI and then track their values here. Since they can
@@ -496,20 +585,7 @@ server <- function(input, output, session) {
     return(tables_with_column)  # Return the names of tables with the selected column
   })
   
-  # output$filtered_tables_tab <- renderUI({
-  #   tables <- tables_with_column()  # Get the table names with the selected column
-  #   if (length(tables) > 0) {
-  #     tagList(
-  #       h4("Tables containing the selected column:"),
-  #       div(style = "margin-bottom: 10px;",
-  #           paste(tables, collapse = ", ")  # Display table names as comma-separated text
-  #       ),
-  #       downloadButton("download_filtered_tables", "Download Tables with Selected Column")
-  #     )
-  #   } else {
-  #     "No tables found with the selected column."
-  #   }
-  # })
+  
   
   # Render the column names in the "Column Names" tab
   output$columns_in_selected_tables <- renderUI({
@@ -673,12 +749,27 @@ server <- function(input, output, session) {
       }
     }
     
+    #if questions_answers is in the list of table names, then we need to drop "questionID"
+    # and then we need to pivot wider, where question becomes column names and the values in these
+    # columns comes from answers
+  
+    # the rows should then be mered on surveyNumber and date
+    if ("questions_answers" %in% names(table_data) & "date" %in% names(creel_joined_data)) {
+      creel_joined_data <- creel_joined_data |> 
+        dplyr::select(-questionID) |> 
+        tidyr::pivot_wider(names_from = question, values_from = answer) |> 
+        dplyr::group_by(date, surveyNumber) |> 
+        dplyr::summarise(across(everything(), ~ dplyr::first(unlist(.))), .groups = "drop")
+    }
+    
+    
     # Handle empty case
     if (is.null(creel_joined_data)) {
       creel_joined_data <- data.frame(Message = "No Data Available")
     }
     return(creel_joined_data)
   })
+  
   
   
   output$creel_joined_tables <- DT::renderDT({
