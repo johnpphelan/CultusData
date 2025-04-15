@@ -30,7 +30,11 @@ abundancedata<- abundanceData |>
   select(date, GPSstart, GPSfinish, SecondsElectricity, PITtag, AcousticTag, length, weight,
          sex, Maturity, Method, Recap, Mort, ScaleBookNo, ScaleNos, Comments, StartTime, EndTime,
          WaterTemp, Stomach, Euthanized, PassNo) |> 
-  mutate(date = as.character(date))
+  mutate(date = as.character(date)) |> 
+  rename( passNo = PassNo, startTime = StartTime, endTime = EndTime, secondsElectricity = SecondsElectricity,
+          pitTagNo = PITtag, acousticTagNo = AcousticTag, euthanized = Euthanized, waterTemp = WaterTemp,
+         maturity = Maturity, method = Method, recap = Recap, mort = Mort, scacleBookNo = ScaleBookNo,
+         scaleNo = ScaleNos, comments = Comments, stomach = Stomach)
 
 query <- "SELECT MAX(captureID) FROM abundanceCapture"
 result <- dbGetQuery(con, query)
@@ -45,9 +49,10 @@ col_types<-get_col_types(abundancedata)
 #add the new columns
 dbExecute(con, "ALTER TABLE abundanceCapture ADD COLUMN GPSstart TEXT")
 dbExecute(con, "ALTER TABLE abundanceCapture ADD COLUMN GPSfinish TEXT")
-dbExecute(con, "ALTER TABLE abundanceCapture ADD COLUMN WaterTemp REAL")
-dbExecute(con, "ALTER TABLE abundanceCapture ADD COLUMN Stomach TEXT")
-dbExecute(con, "ALTER TABLE abundanceCapture ADD COLUMN Euthanized TEXT")
-dbExecute(con, "ALTER TABLE abundanceCapture ADD COLUMN PassNo REAL")
+dbExecute(con, "ALTER TABLE abundanceCapture ADD COLUMN waterTemp REAL")
+dbExecute(con, "ALTER TABLE abundanceCapture ADD COLUMN stomach TEXT")
+dbExecute(con, "ALTER TABLE abundanceCapture ADD COLUMN euthanized TEXT")
+dbExecute(con, "ALTER TABLE abundanceCapture ADD COLUMN passNo REAL")
 
 dbAppendTable(con, "abundanceCapture", abundancedata)
+dbDisconnect(con)
