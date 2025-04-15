@@ -18,12 +18,20 @@ names(captureTable)<-gsub("_","",names(captureTable))
 captureTable<- captureTable |> 
   mutate(captureID = row_number(), date = as.character(date))
 
+
+captureTable = captureTable |> 
+  rename(secondsElectricity = SecondsElectricity, pitTagNo = Pittag, acousticTagNo = AcousticTag,
+         maturity = Maturity, method = Method, recap = Recap, mort = Mort, scacleBookNo = ScaleBookNo,
+         scaleNo = ScaleNos, comments = Comments, startTime = Starttime, endTime = EndTime)
+
 col_types<-get_col_types(captureTable)
+
+
 
 
 sur_col_types_sql <- col_types |> 
   dplyr::mutate(key_status = case_when(
-    col_name %in% c("captureID", "date", "GPSPoint", "Pittag", "AcousticTag", "ScaleBookNo", "ScaleNos") ~ "KEY",
+    col_name %in% c("captureID") ~ "KEY",
     TRUE ~ ""
   )) |> 
   dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(sqlite_type), " ", key_status))
