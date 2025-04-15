@@ -240,9 +240,9 @@ answersLong<- answersLong |>
   mutate(date = as.Date(date)) |> 
   arrange(date) |> 
   mutate(date_group = cumsum(date != lag(date, default = first(date)))) |> 
-  group_by(date_group) |> 
-  mutate(surveyNumber = row_number()) |>  
-  ungroup() |> 
+  # group_by(date_group) |> 
+  # mutate(surveyNumber = row_number()) |>  
+  # ungroup() |> 
   select(-date_group) |> 
   mutate(date = as.character(date))
 
@@ -263,7 +263,7 @@ col_types<-get_col_types(answersLong)
 
 sur_col_types_sql <- col_types |> 
   dplyr::mutate(key_status = case_when(
-    col_name %in% c("surveyNumber",  "questionID") ~ "KEY",
+    col_name %in% c("surveyNumber", "time", "questionID") ~ "KEY",
     TRUE ~ ""
   )) |> 
   dplyr::reframe(a = paste0(col_name, " ", stringr::str_to_upper(type), " ", key_status))
