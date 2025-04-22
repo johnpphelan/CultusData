@@ -17,8 +17,7 @@ lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/Ge
 
 class_temps<-read_xlsx(paste0(lan_folder, "2024 Projects/Temperature/CLASSTempSummary2024.xlsx"))
 
-
-str(class_temps)
+#str(class_temps)
 class_temps<- class_temps |> 
   rename(date = Date, site = `Site Name`, time = Time, coordinates = Coordinates,
          airTemp = `Air Temp(C)`, depthAtLocation = `Depth at Location`, sampleDepth = `Sample Depth(m)`, 
@@ -32,7 +31,7 @@ class_temps<- class_temps |>
 
 col_types<-get_col_types(class_temps)
 
- class_temps<- class_temps |> 
+class_temps<- class_temps |> 
   mutate(tempID = row_number())
 
 sur_col_types_sql <- col_types |> 
