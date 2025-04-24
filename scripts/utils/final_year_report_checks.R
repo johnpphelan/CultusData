@@ -6,6 +6,7 @@ library(openxlsx)
 library(DBI)
 library(tidyr)
 library(lubridate)
+library(ggplot2)
 
 db_filepath = "output/CultusData.sqlite"
 
@@ -101,6 +102,14 @@ ggplot(activity_df, aes(x = reorder(Activity, -Count), y = Count)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+query <- "SELECT * FROM creelSurveyQuestions"
+dbExecute(con = con, query)
+#querydelete<-"DROP TABLE surveyData"
+result <- dbSendQuery(conn = con, query)
+df_q<-fetch(result, -1)
+
+dbClearResult(result)
+
 query <- "SELECT * FROM creelSurveyAnswers"
 dbExecute(con = con, query)
 #querydelete<-"DROP TABLE surveyData"
@@ -108,7 +117,10 @@ result <- dbSendQuery(conn = con, query)
 df<-fetch(result, -1)
 
 dbClearResult(result)
-df
+
+
+
+names(df)
 
 df <- df |> 
   mutate(date = as.Date(date)) |> 
@@ -120,7 +132,73 @@ df |>
   distinct(date, surveyNumber) |> 
   count()
 
+df |> 
+  filter(questionID == 3) |> 
+  count(answer) |> 
+  arrange(desc(n))
+
 unique(df$answer)
+
+df_summary <- df |> 
+  filter(questionID == 3) |> 
+  mutate(
+    reason = case_when(
+      str_detect(answer, regex("SMB|small ?mouth ?bass", ignore_case = TRUE)) ~ "SMB / bass",
+      str_detect(answer, regex("fish|fishing|caught|rod", ignore_case = TRUE)) ~ "Fishing",
+      str_detect(answer, regex("close|nearby|near|live|local|camping|close ?by|campground", ignore_case = TRUE)) ~ "Proximity",
+      str_detect(answer, regex("recreation|swim|BBQ|quiet|vacation", ignore_case = TRUE)) ~ "Recreation / Relaxation",
+      TRUE ~ "Other"
+    )
+  ) |> 
+  count(reason, sort = TRUE) |> 
+  mutate(percentage = round(n / sum(n) * 100, 1))
+
+df_summary
+
+# are you aware that the fish were illegally introduced?
+df |> 
+  filter(questionID == 7) |> 
+  count(answer, sort = TRUE) |> 
+  mutate(percentage = round(n / sum(n) * 100, 1))
+
+# Are you aware of don't let it loose practices?
+df |> 
+  filter(questionID == 15) |> 
+  count(answer, sort = TRUE) |> 
+  mutate(percentage = round(n / sum(n) * 100, 1))
+
+
+
+
+query <- "SELECT * FROM creelFisherDemography"
+dbExecute(con = con, query)
+#querydelete<-"DROP TABLE surveyData"
+result <- dbSendQuery(conn = con, query)
+df<-fetch(result, -1)
+
+dbClearResult(result)
+
+df <- df |> 
+  mutate(date = as.Date(date)) |> 
+  filter(date >= "2024-01-01")
+
+head(df)
+
+df |> 
+  count(AgeClass)
+
+query <- "SELECT * FROM creelFishResults"
+dbExecute(con = con, query)
+#querydelete<-"DROP TABLE surveyData"
+result <- dbSendQuery(conn = con, query)
+df<-fetch(result, -1)
+
+dbClearResult(result)
+
+df <- df |> 
+  mutate(date = as.Date(date)) |> 
+  filter(date >= "2024-01-01")
+
 
 # query <- "SELECT * FROM creelShifts"
 # dbExecute(con = con, query)
