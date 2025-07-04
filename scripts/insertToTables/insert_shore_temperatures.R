@@ -9,9 +9,11 @@ db_filepath = "output/CultusData.sqlite"
 
 con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
-lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/"
+# lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/"
+# 
+# shore_temps<-read_xlsx(paste0(lan_folder, "2025 Projects/Temperature/CultusShoreTemps(SMB).xlsx"))
 
-shore_temps<-read_xlsx(paste0(lan_folder, "2025 Projects/Temperature/CultusShoreTemps(SMB).xlsx"))
+shore_temps<-read_xlsx(paste0("data/CultusShoreTemps(SMB).xlsx"))
 
 location<-as.character(colnames(shore_temps[1]))
 

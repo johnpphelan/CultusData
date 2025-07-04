@@ -13,7 +13,7 @@ con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 print(dbListObjects(con))
 
 
-droptable<-"DROP TABLE IF EXISTS fishingDetails"
+droptable<-"DROP TABLE IF EXISTS creelICE"
 dbExecute(con, droptable)
 
 

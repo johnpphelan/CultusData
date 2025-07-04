@@ -18,9 +18,55 @@ library(data.table)
 library(lubridate)
 library(geosphere)
 library(ggmap)
+library(sqldf)
+source("scripts/utils/col_types_f.R")
 
-onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/R_projects/CultusData/")
-all_creel <- read_xlsx(paste0(onedrive_wd,"/data/Cultus_Lake_Creel_-_All_Query.xlsx"))
+# onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/R_projects/CultusData/")
+# all_creel <- read_xlsx(paste0(onedrive_wd,"/data/Cultus_Lake_Creel_-_All_Query.xlsx"))
+
+db_filepath <- "scripts/shiny/www/CultusData.sqlite"
+con <- dbConnect(RSQLite::SQLite(), db_filepath)
+
+# Find all tables with 'creel' in the name
+creel_table_names <- dbGetQuery(con, "
+  SELECT name 
+  FROM sqlite_master 
+  WHERE type='table' AND name LIKE '%creel%'
+")$name
+
+# Read each table into a list
+creel_tables_list <- lapply(creel_table_names, function(tbl) {
+  dbReadTable(con, tbl)
+})
+
+# Name the list elements by their corresponding table names
+names(creel_tables_list) <- creel_table_names
+
+surveyQuestionsAnswers<- merge(
+  creel_tables_list$creelSurveyAnswers,
+  creel_tables_list$creelSurveyQuestions,
+  by = "questionID"
+)
+ 
+# Remove the two original tables from the list
+creel_tables_list$creelSurveyAnswers <- NULL
+creel_tables_list$creelSurveyQuestions <- NULL 
+
+
+# Remove 'time' column from each table in the list, if it exists
+creel_tables_list_cleaned <- lapply(creel_tables_list, function(df) {
+  if ("time" %in% names(df)) {
+    df <- select(df, -time)
+  }
+  df
+})
+
+# Perform full join across all cleaned tables
+all_creel <- reduce(creel_tables_list_cleaned, full_join)
+
+
+samples<- all_creel |> 
+  filter(date == ("2023-07-02"))
 
 results_2023<- all_creel |> 
   mutate(date = as.Date(date)) |> 
@@ -169,7 +215,7 @@ species_24_plot_filtered <- species_count_2024 |>
 species_colors <- RColorBrewer::brewer.pal(n = length(unique(species_24_plot_filtered$prefferedSpp)), name = "Dark2")
 
 # Plot without "non-angler"
-ggplot(species_24_plot_filtered, aes(x = reorder(prefferedSpp, n), y = n, fill = prefferedSpp)) +
+p1<-ggplot(species_24_plot_filtered, aes(x = reorder(prefferedSpp, n), y = n, fill = prefferedSpp)) +
   geom_bar(stat = "identity", show.legend = FALSE) +
   coord_flip() +
   labs(
@@ -187,6 +233,8 @@ ggplot(species_24_plot_filtered, aes(x = reorder(prefferedSpp, n), y = n, fill =
     axis.title.y = element_text(size = 14, face = "bold"),  # Larger and bold y-axis label
     plot.title = element_text(size = 16, face = "bold")
   )
+p1
+ggplot2::ggsave("images/fish_spp_2024.png", plot = p1, width = 10, height = 8, dpi = 300)
 
 ```
 
