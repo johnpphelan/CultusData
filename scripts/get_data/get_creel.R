@@ -6,7 +6,7 @@ source("scripts/utils/fix_col_names_f.R")
 
 
 
-lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/"
+lan_folder = "//sfp.idir.bcgov/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/"
 
 
 main_page<-read_excel(path = paste0(lan_folder,"2023 projects/creel survey/2023 SMB creel_final working.xlsx"),
