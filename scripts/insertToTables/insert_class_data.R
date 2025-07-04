@@ -13,9 +13,10 @@ con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
 DBI::dbListTables(con)
 
-lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/"
-
-class_temps<-read_xlsx(paste0(lan_folder, "2025 Projects/Temperature/CLASS Field Sheet 2025.xlsx"))
+# lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/"
+# 
+# class_temps<-read_xlsx(paste0(lan_folder, "2025 Projects/Temperature/CLASS Field Sheet 2025.xlsx"))
+class_temps<-read_xlsx(paste0("data/CLASS Field Sheet 2025.xlsx"))
 
 class_temps<- class_temps |> 
   rename(date = Date, site = `Site Name`, time = Time, coordinates = Coordinates,
