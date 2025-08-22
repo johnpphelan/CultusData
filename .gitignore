@@ -41,3 +41,4 @@ output/*
 scripts/shiny/www/**
 *.sqlite
 data
+images
