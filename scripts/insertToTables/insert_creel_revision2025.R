@@ -1,65 +1,90 @@
-  library(data.table)
-  library(readxl)
-  library(dplyr)
-  library(stringr)
-  library(openxlsx)
-  library(DBI)
-  library(tidyr)
-  library(lubridate)
-  source("scripts/utils/fix_col_names_f.R")
-  
-  lan_folder = "//sfp.idir.bcgov/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/2025 projects/Creel Surveys/"
-  
-  
-  # file_list<-list.files(path =paste0(lan_folder,"2024 projects/Creel Surveys/Creel Survey forms 2024 (backup)/"),
-  #                       pattern = "*.xlsx", full.names = T)
-  # 
-  # db_filepath = "output/CultusData.sqlite"
-  # 
-  # con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
-  # 
-  # DBI::dbListTables(con)
-  # 
-  # f_name<-file_list[1]
-  # f_name
-  db_filepath = "output/CultusData.sqlite"
-  con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
-  
-  DBI::dbListTables(con)
-  
-  f_name<-paste0(lan_folder,"Cultus Lake Creel Form 2024_Data_Working2.xlsx")
-  creelData<-read_excel(path = paste0(lan_folder,"Cultus Lake Creel Form 2024_Data_Working2.xlsx"), sheet = 2, col_names = TRUE)
-  names(creelData)[names(creelData) == "# SMB c...15"]<- "# SMB c"
-  names(creelData)[names(creelData) == "# SMB c...23"]<- "# SMB r"
-  
-  namesFix<-names(creelData)
-  namesFix<-gsub(" ", "_", namesFix)
-  namesFix<-gsub("#", "No", namesFix)
-  namesFix<-remove_special_chars(namesFix)
-  names(creelData)<-namesFix
-  
-  
-  sheets<-excel_sheets(paste0(lan_folder,"Cultus Lake Creel Form 2024_Data_Working2.xlsx"))
-  sheetOI<-grep("Demographic", sheets, value = TRUE)
-  demography<-lapply(sheetOI, read_excel, path = f_name)
-  
-  sheetOI<-grep("Fish", sheets, value = TRUE)
-  fishdata<-lapply(sheetOI, read_excel, path = f_name)
-  
-  sheetOI<-grep("ICE", sheets, value = TRUE)
-  ICE<-data.frame(lapply(sheetOI, read_excel, path = f_name))
-  
-  ####################################################################
-  # 1. Insert main
-  
-  main <- creelData[,1:32]
-  
-  query <- "SELECT * FROM creelMain"
-  #querydelete<-"DROP TABLE surveyData"
-  result <- dbSendQuery(conn = con, query)
-  df<-fetch(result, -1)
-  df
-  dbClearResult(result)
+library(tidyverse)
+library(data.table)
+library(readxl)
+library(dplyr)
+library(stringr)
+library(openxlsx)
+library(DBI)
+library(tidyr)
+library(lubridate)
+source("scripts/utils/fix_col_names_f.R")
+
+lan_folder = "//sfp.idir.bcgov/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/2025 projects/Creel Surveys/"
+
+
+# file_list<-list.files(path =paste0(lan_folder,"2024 projects/Creel Surveys/Creel Survey forms 2024 (backup)/"),
+#                       pattern = "*.xlsx", full.names = T)
+# 
+# db_filepath = "output/CultusData.sqlite"
+# 
+# con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
+# 
+# DBI::dbListTables(con)
+# 
+# f_name<-file_list[1]
+# f_name
+db_filepath = "output/CultusData.sqlite"
+con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
+
+DBI::dbListTables(con)
+
+the_files = list.files("//sfp.idir.bcgov/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/2025 projects/Creel Surveys/Archived Creel Forms/",
+                       pattern = "*.xlsx", recursive = T, full.names = TRUE)
+
+sheet_names = readxl::excel_sheets(the_files[1])
+
+files_read_l = the_files |> 
+  lapply(
+    \(x) {
+      all_sheets = readxl::excel_sheets(x)
+      all_sheets |> 
+        purrr::map( ~ {
+          readxl::read_excel(x, sheet = .x, col_types = 'text')
+        }) |> 
+        purrr::set_names(all_sheets)
+    }
+  )
+
+
+
+files_read_f = list_flatten(files_read_l)
+
+sheets_combineds<-sheet_names |> 
+  map( ~ {
+    files_read_f[which(names(files_read_f) == .x)] |> 
+      dplyr::bind_rows()
+  })
+names(sheets_combineds)<-sheet_names
+
+main<-sheets_combineds$`Main Data`
+fish_data<-sheets_combineds$`Fish Data`
+demo<-sheets_combineds$`Demographic Data`
+ICE<-sheets_combineds$`ICE`
+
+
+
+####################################################################
+# 1. Insert main
+
+main_data<-main[1:32,] |> 
+  mutate(Date = as.Date(as.numeric(Date), origin = "1899-12-30"),
+         datetime = as.POSIXct(as.numeric(Time), origin = "1899-12-30", tz = "UTC"),
+         Date = as.Date(datetime),
+         Time = hms::as_hms(format(datetime, "%H:%M:%S"))) |>
+  select(-datetime)
+
+
+query <- "SELECT * FROM creelMain"
+#querydelete<-"DROP TABLE surveyData"
+result <- dbSendQuery(conn = con, query)
+df<-fetch(result, -1)
+df
+dbClearResult(result)
+
+main_data |> 
+  rename(surveyNumber = `Survey #`, surveyor = Surveyor, date = Date, time = Time,
+         shift = Shift, site = Site)
+
 
 
 
@@ -336,7 +361,7 @@ ICE <- ICE |>
   dplyr::select(-Air.temperature, -Cloud.cover, -Wind, -Precipitation)
 
 ICE <- ICE |> 
-dplyr::mutate(date = as.Date(date), time =format(lubridate::ymd_hms(time), "%H:%M:%S")) |> 
+  dplyr::mutate(date = as.Date(date), time =format(lubridate::ymd_hms(time), "%H:%M:%S")) |> 
   mutate(date = as.Date(date)) |> 
   arrange(date) |> 
   mutate(date_group = cumsum(date != lag(date, default = first(date)))) |> 
