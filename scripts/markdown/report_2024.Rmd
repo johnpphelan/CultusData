@@ -58,9 +58,6 @@ abundanceU<- abundance |>
   mutate(sex = "U")
 
 
-recaptured<- abundance |> 
-  filter(!is.na(Recap))
-
 
 
 
@@ -70,7 +67,7 @@ recaptured<- abundance |>
 
 ```{r plot_elect}
 ggplot(data = abundance) +
-  geom_histogram(aes(SecondsElectricity), bins = 30, fill = "steelblue", color = "black", alpha = 0.7) +
+  geom_histogram(aes(secondsElectricity), bins = 30, fill = "steelblue", color = "black", alpha = 0.7) +
   labs(
     title = "Distribution of Seconds Electricity",
     x = "Seconds of Electricity Used",
@@ -84,6 +81,38 @@ ggplot(data = abundance) +
   )
 
 ```
+
+### Number fish per day
+
+```{r plot_fishPerDay}
+# get the number of fish got in abundance per day
+fishPerDay <- abundance |> 
+  filter(date >= "2024-01-01",
+         !is.na(secondsElectricity)) |> 
+  group_by(date) |> 
+  summarise(total_fish = n())
+
+# plot this
+p1<-ggplot(data = fishPerDay) +
+  geom_bar(aes(x = date, y = total_fish), stat = "identity", fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(
+    title = "Number of Fish Captured per Day",
+    x = "Date",
+    y = "Total Fish Captured"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14, face = "bold")
+  )
+
+#save to ./images
+ggsave("./images/abundance_fishPerDay.jpg", plot = p1, width = 10, height = 6)
+```
+
+
 
 ### Males vs females and unsexed fish
 
