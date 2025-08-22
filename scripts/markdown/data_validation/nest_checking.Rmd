@@ -1,0 +1,232 @@
+
+---
+title: "Nest Data Check"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    theme: cosmo
+---
+
+# Nest Surveys {.tabset}
+
+## 2023
+
+```{r load-clean-main, message=FALSE, warning=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(lubridate)
+library(hms)
+library(purrr)
+library(skimr)
+library(knitr)
+library(kableExtra)
+library(dplyr)
+library(plotly)
+library(tidyr)
+library(htmltools)
+library(lubridate)
+source("scripts/utils/fix_col_names_f.R")
+
+lan_folder <- "//sfp.idir.bcgov/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/"
+
+
+nest_2023<-readxl::read_excel(paste0(lan_folder, "2023 projects/nest surveys/2023 nest survey data raw.xlsx"), col_types = 'text') |> 
+  janitor::clean_names() |> 
+  mutate(date = as.Date(as.numeric(date), origin = "1899-12-30")) |> 
+  rename(northing = northinh, nest_depth = depth_of_nest_m, nest_diameter = approximate_diameter_of_nest_m,
+         male_present = presence_of_guarding_male_y_n, life_stage_on_nest = life_stage_on_nest_egg_alevin_or_fry,
+         adj_structure = adjacent_structure_e_g_dock_or_mouring_buoy_na, activity = activity_completed_observation_vs_nest_destruction, nest_destruction = nest_fully_destroyed_y_n_partially)
+
+# num_cols<-c("easting", "northing", "nest_depth", "nest_diameter")
+# 
+# test<- nest_2023 |> 
+#   mutate(across(all_of(num_cols), as.numeric))
+
+# # Get a summary of rows where conversion introduced NAs
+# na_check <- map_dfr(num_cols, function(col) {
+#   orig <- nest_2023[[col]]
+#   conv <- test[[col]]
+#   
+#   # Find indices where original is not NA, but converted is NA
+#   bad_indices <- which(!is.na(orig) & is.na(conv))
+#   
+#   tibble(
+#     column = col,
+#     row_number = bad_indices,
+#     original_value = orig[bad_indices]
+#   )
+# })
+# 
+# na_check
+
+#spelling mistake fix
+nest_2023$life_stage_on_nest<-gsub("alvein", "alevin", nest_2023$life_stage_on_nest)
+
+
+
+
+```
+
+The nest depths and diameters look to be in line with data in the literature.
+
+
+```{r plot_2023_nest_2023}
+# Build list of plots
+plots <- nest_2023 |>
+  mutate(across(-date, as.character)) |>
+  pivot_longer(cols = -date, names_to = "variable", values_to = "value") |>
+  group_by(variable) |>
+  group_split()
+
+plot_list <- map(plots, function(df) {
+  df <- df |> 
+    mutate(value_numeric = suppressWarnings(as.numeric(value)))
+
+  use_numeric <- sum(!is.na(df$value_numeric)) > 0.5 * nrow(df)
+
+  if (use_numeric) {
+    # Plot numeric values over time
+    plot_ly(
+      df,
+      x = ~date,
+      y = ~value_numeric,
+      type = "scatter",
+      mode = "lines+markers",
+      name = unique(df$variable)
+    ) |>
+      layout(
+        title = list(text = unique(df$variable)),
+        xaxis = list(title = "Date"),
+        yaxis = list(title = "Value")
+      )
+  } else {
+    # Plot count of each category per date
+    df_count <- df |> count(date, value)
+
+    plot_ly(
+      df_count,
+      x = ~date,
+      y = ~n,
+      type = "bar",
+      color = ~value
+    ) |>
+      layout(
+        title = list(text = unique(df$variable)),
+        xaxis = list(title = "Date"),
+        yaxis = list(title = "Count"),
+        barmode = "stack"
+      )
+  }
+})
+
+# Display all plots
+tagList(
+  lapply(seq_along(plot_list), function(i) {
+    div(
+      h3(unique(plots[[i]]$variable)),
+      plot_list[[i]]
+    )
+  })
+)
+
+```
+
+## 2024
+
+
+
+```{r data_2024}
+
+nest_2024<-readxl::read_excel(paste0(lan_folder, "2024 projects/Nest Surveys/2024_Nest_Survey_Data_Compiled-Nicole_Kaminski.xlsx"), col_types = 'text') |> 
+  janitor::clean_names() |> 
+  mutate(date = as.Date(as.numeric(date), origin = "1899-12-30")) |> 
+  rename(nest_depth = depth, nest_diameter = diameter,
+         male_present = gaurding_male, life_stage_on_nest = life_stage, 
+         nest_destruction = nests_destroyed, comments = x14) |> 
+  select(-x16)
+
+nest_2024 <- nest_2024 |>
+  mutate(nest_diameter = suppressWarnings(as.numeric(nest_diameter)),
+         nest_depth = suppressWarnings(as.numeric(nest_diameter)))
+
+nests_bigger_2m <- nest_2024 |>
+  filter(!is.na(nest_diameter), nest_diameter > 2) |>
+  nrow()
+
+nests_deeper_3m <- nest_2024 |>
+  filter(!is.na(nest_depth), nest_depth > 3) |>
+  nrow()
+
+
+
+```
+
+There are two nests at depths of greater than 4m. Jul-30, there is a recording of a nest at 6m and Aug-21, there is a nest at a depth of 4.6m. There are no raw data sheets to check these data. There are `r nests_deeper_3m` recoded nests deeper than 3m in 2024.
+
+There is a nest diameter listed on Jul-30 of 6m. There are `r nests_bigger_2m` recoded nests >2m in 2024.
+
+
+```{r plot_2024_nest_2024}
+# Build list of plots
+plots <- nest_2024 |>
+  mutate(across(-date, as.character)) |>
+  pivot_longer(cols = -date, names_to = "variable", values_to = "value") |>
+  group_by(variable) |>
+  group_split()
+
+plot_list <- map(plots, function(df) {
+  df <- df |> 
+    mutate(value_numeric = suppressWarnings(as.numeric(value)))
+
+  use_numeric <- sum(!is.na(df$value_numeric)) > 0.5 * nrow(df)
+
+  if (use_numeric) {
+    # Plot numeric values over time
+    plot_ly(
+      df,
+      x = ~date,
+      y = ~value_numeric,
+      type = "scatter",
+      mode = "lines+markers",
+      name = unique(df$variable)
+    ) |>
+      layout(
+        title = list(text = unique(df$variable)),
+        xaxis = list(title = "Date"),
+        yaxis = list(title = "Value")
+      )
+  } else {
+    # Plot count of each category per date
+    df_count <- df |> count(date, value)
+
+    plot_ly(
+      df_count,
+      x = ~date,
+      y = ~n,
+      type = "bar",
+      color = ~value
+    ) |>
+      layout(
+        title = list(text = unique(df$variable)),
+        xaxis = list(title = "Date"),
+        yaxis = list(title = "Count"),
+        barmode = "stack"
+      )
+  }
+})
+
+# Display all plots
+tagList(
+  lapply(seq_along(plot_list), function(i) {
+    div(
+      h3(unique(plots[[i]]$variable)),
+      plot_list[[i]]
+    )
+  })
+)
+
+```
+

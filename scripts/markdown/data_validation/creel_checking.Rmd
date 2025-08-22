@@ -1,0 +1,917 @@
+---
+title: "Creel Survey Data Check"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    theme: cosmo
+---
+
+# Creel Survey Data {.tabset}
+
+```{r load-clean-main, message=FALSE, warning=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(lubridate)
+library(hms)
+library(purrr)
+library(skimr)
+library(knitr)
+library(kableExtra)
+library(dplyr)
+library(plotly)
+library(tidyr)
+library(htmltools)
+library(lubridate)
+source("scripts/utils/fix_col_names_f.R")
+
+lan_folder <- "//sfp.idir.bcgov/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/"
+
+the_files <- c(list.files(c(
+  # No raw files in 2023, we could add these in later
+  #"//sfp.idir.bcgov/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/2023 projects/Creel Surveys/Archived Creel Forms/",
+  "//sfp.idir.bcgov/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/2024 projects/Creel Surveys/Creel Survey forms 2024 (backup)/",
+  "//sfp.idir.bcgov/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/2025 projects/Creel Surveys/Archived Creel Forms/"
+),
+pattern = "*.xlsx", recursive = TRUE, full.names = TRUE),
+"//sfp.idir.bcgov/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/SPECIES/Smallmouth Bass/Cultus lake/2023 projects/Creel Surveys/2023 SMB creel_final not edits.xlsx"
+)
+
+the_files <- the_files[!grepl("~$", the_files)] # Remove temp files
+
+sheet_names <- readxl::excel_sheets(the_files[1])
+
+files_read_l <- the_files |> 
+  lapply(function(x) {
+    all_sheets <- readxl::excel_sheets(x)
+    all_sheets |> 
+      purrr::map(~ {
+        # read everything as text
+        dat_text <- readxl::read_excel(x, sheet = .x, col_types = "text")
+        
+        # read again with guessing
+        dat_guess <- readxl::read_excel(x, sheet = .x)
+        
+        # if surveyor exists in the guessed version, replace it
+        if ("Surveyor" %in% names(dat_guess)) {
+          dat_text$Surveyor <- dat_guess$Surveyor
+        }
+        
+        # rename special columns as you had before
+        names(dat_text)[names(dat_text) == "# SMB c...15"] <- "# SMB c"
+        names(dat_text)[names(dat_text) == "# SMB c...23"] <- "# SMB r"
+        
+        # clean names
+        janitor::clean_names(dat_text)
+      }) |> purrr::set_names(all_sheets)
+  })
+
+files_read_f <- list_flatten(files_read_l)
+
+
+
+sheets_combined <- sheet_names |> 
+  map(~ {
+    if ("surveyor" %in% names(.x)) {
+      .x$surveyor <- as.character(.x$surveyor)
+    }
+    files_read_f[which(names(files_read_f) == .x)] |> 
+      bind_rows()
+  })
+
+names(sheets_combined) <- sheet_names
+
+main <- sheets_combined$`Main Data`
+
+# main page contains the same survey number and date - we should only keep one when this combo is the same
+
+# Cleaning main data
+main_test <- main |> 
+  mutate(date = as.Date(as.numeric(date), origin = "1899-12-30")) |> 
+  group_by(survey_number, date, time) |>
+  fill(everything(), .direction = "downup") |>  # fill missing values in group
+  slice_head(n = 1) |>                          # keep just the first row
+  ungroup()
+  mutate(date = as.character(date))
+  arrange(date) |> 
+  group_by(as.character(date)) |> 
+  mutate(survey_number = row_number()) |>  
+  ungroup() |> 
+  select(-`as.character(date)`) |> 
+  mutate(
+    date = as.character(date),
+    time = hms::as_hms(as.numeric(time) %% 1 * 86400)
+  ) |>
+  group_by(time) |> 
+  mutate(
+    time = if_else(
+      row_number() > 1,
+      hms::as_hms(as.numeric(time) + 5 * 60 * (row_number() - 1)),
+      time
+    )
+  ) |> 
+  ungroup() |> 
+  mutate(time = as.character(time)) |> 
+  mutate(
+    shift = str_remove(shift, "^\\d+: "),
+    shift_end = sub(".*-", "", shift),
+    shift_start = sub("-.*", "", shift),
+    shift_start = if_else(str_detect(shift_start, "^\\d{1,2}:\\d{2}$"), paste0(shift_start, ":00"), shift_start),
+    shift_end = if_else(str_detect(shift_end, "^\\d{1,2}:\\d{2}$"), paste0(shift_end, ":00"), shift_end),
+    shift_start_time = hms::parse_hms(shift_start),
+    shift_end_time = hms::parse_hms(shift_end),
+    hours_worked = as.numeric(difftime(shift_end_time, shift_start_time, units = "hours")),
+    shift_start_time = paste(date, shift_start_time),
+    shift_end_time = paste(date, shift_end_time)
+  )
+
+
+
+main <- main |> 
+  relocate(shift_end:hours_worked, .before = everything())
+
+main <- main |> 
+  mutate(
+    wind = case_when(
+      suppressWarnings(!is.na(as.numeric(wind))) ~ {
+        date_val <- as.Date(as.numeric(wind), origin = "1899-12-30")
+        paste0(month(date_val), "-", day(date_val))
+      },
+      TRUE ~ wind
+    )
+  )
+
+main <- main |> 
+  select(
+    survey_number:total_fish_caught,
+    number_smb_c:number_other_spp_c,
+    number_pikeminnow_caught,
+    total_retained,
+    number_smb_r:number_other_spp_r,
+    number_pikeminnow_r,
+    everything()
+  )
+
+main <- main |> 
+  mutate(
+    air_temp = coalesce(air_temp, air_temperature, mean_air_temperature),
+    surveyor = coalesce(surveyor, x2),
+    wind = coalesce(wind, x44)
+  ) |> 
+  select(-c(air_temperature, x2, x44))
+
+main_page <- main[,1:37]
+
+main_page <- main_page |> 
+  rename(
+    fishing_method = vessel,
+    number_pikeminnow_c = number_pikeminnow_caught
+  )
+
+main_page <- main_page |> 
+  filter(!is.na(date))
+
+main_page<- main_page |> 
+  relocate(shift_end:hours_worked, .after = everything())
+
+```
+
+## Main Data Table
+
+Comparison of fish reported by year
+
+```{r fish_caught}
+counted <- main_page |>
+  mutate(year = year(as.Date(date))) |>  
+  group_by(year) |> 
+  summarise(across(
+    .cols = c(matches("^number.*[cr]$"), any_of(c("total_fish_caught", "total_fish_retained"))),
+    .fns = ~ sum(as.numeric(.x), na.rm = TRUE),
+    .names = "sum_{.col}"
+  )) |> 
+  as_tibble()
+
+main_t_totals_long <- counted |>
+  pivot_longer(
+    cols = -year,                
+    names_to = "metric",
+    values_to = "total"
+  )
+
+library(ggplot2)
+ggplot(main_t_totals_long, aes(x = metric, y = total, fill = factor(year))) +
+  geom_col(position = position_dodge(width = 0.8)) +
+  labs(
+    x = "Metric",
+    y = "Total Count",
+    fill = "Year",
+    title = "Total Counts by Metric and Year"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+
+```
+
+
+There are discrepancies in the total caught and total retained, versus the counts by species. I would assume this is due to surveying methods, getting a total count from an angler, but not getting to species level. I do not think this is a major consequence, but should probably be highlighted when using these data.
+
+Chceking retained counts:
+
+```{r}
+retained_cols <- grep("^number.*_r$", names(main_page), value = TRUE)
+
+retained_by_year <- main_page %>%
+  mutate(year = year(as.Date(date))) %>%
+  group_by(year) %>%
+  summarise(
+    retained_component_by_spp = sum(rowSums(across(all_of(retained_cols), ~ as.numeric(.x)), na.rm = TRUE)),
+    reported_total_retained = sum(as.numeric(total_retained), na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    difference_retained = retained_component_by_spp - reported_total_retained
+  )
+
+knitr::kable(retained_by_year)
+
+```
+
+
+Checking caught counts:
+
+```{r}
+caught_cols <- grep("^number.*_c$", names(main_page), value = TRUE)
+
+caught_by_year <- main_page %>%
+  mutate(year = year(as.Date(date))) %>%
+  group_by(year) %>%
+  summarise(
+    caught_component_by_spp = sum(rowSums(across(all_of(caught_cols), ~ as.numeric(.x)), na.rm = TRUE)),
+    reported_total_caught = sum(as.numeric(total_fish_caught), na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    difference_caught = caught_component_by_spp - reported_total_caught
+  )
+
+knitr::kable(caught_by_year)
+```
+
+
+
+## Fishing Effort
+
+```{r fish-effort}
+
+fishing_effort<- main_page |> 
+  mutate(year = year(as.Date(date))) |>  
+  group_by(year) |> 
+  summarise( number_rods_year = sum(as.numeric(number_rods), na.rm = TRUE),
+             total_person_hr_fished_year = sum(as.numeric(total_person_hr_fished ), na.rm = TRUE))
+  
+knitr::kable(fishing_effort, caption = "Fishing Effort by Year", digits = 2)
+
+
+```
+
+
+## Main Table - Plots
+
+These are all plots that could be easily completed - subject to how columns are structured. If there are mixes of letters and numbers, we will not be able to conver that to numeric. The following are plots of what data was converted, which can be used to check for any erroneous data entries.
+
+
+
+```{r main_plots}
+
+conversion_failures <- list()
+
+plots <- main_page |>
+  mutate(across(-date, as.character)) |>
+  pivot_longer(cols = -date, names_to = "variable", values_to = "value") |>
+  group_by(variable) |>
+  group_split()
+
+plot_list <- map(plots, function(df) {
+  df <- df |> 
+    mutate(value_numeric = suppressWarnings(as.numeric(value)))
+
+  # Identify failed entries (non-NA in original, but NA after conversion)
+  failed_entries <- df %>%
+    filter(!is.na(value) & is.na(value_numeric)) %>%
+    select(date, variable, value)
+
+  if (nrow(failed_entries) > 0) {
+    conversion_failures[[unique(df$variable)]] <<- failed_entries
+  }
+
+  use_numeric <- sum(!is.na(df$value_numeric)) > 0.5 * nrow(df)
+
+  if (use_numeric) {
+    # Plot numeric values over time
+    plot_ly(
+      df,
+      x = ~date,
+      y = ~value_numeric,
+      type = "scatter",
+      mode = "lines+markers",
+      name = unique(df$variable)
+    ) |>
+      layout(
+        title = list(text = unique(df$variable)),
+        xaxis = list(title = "Date"),
+        yaxis = list(title = "Value")
+      )
+  } else {
+    # Plot count of each category per date
+    df_count <- df |> count(date, value)
+
+    plot_ly(
+      df_count,
+      x = ~date,
+      y = ~n,
+      type = "bar",
+      color = ~value
+    ) |>
+      layout(
+        title = list(text = unique(df$variable)),
+        xaxis = list(title = "Date"),
+        yaxis = list(title = "Count"),
+        barmode = "stack"
+      )
+  }
+})
+
+# Combine and print failures as a table
+if (length(conversion_failures) > 0) {
+  failure_table <- bind_rows(conversion_failures, .id = "failed_variable")
+  #kable(failure_table, caption = "Entries that failed numeric conversion")
+}
+
+
+```
+
+The following columns are those that an issue in conversion. There is also a table to help identify which rows in these columns failed.
+
+```{r columns_that_failed}
+paste("The column names that failed are:", 
+      paste(unique(failure_table$variable), collapse = ", "))
+
+
+# Combine and print failures as a table
+DT::datatable(
+    failure_table,
+    options = list(
+      pageLength = 10,   # show 10 rows at a time
+      autoWidth = TRUE
+    ),
+    caption = "Entries that failed numeric conversion"
+  )
+```
+
+And the plots:
+
+```{r main_plot}
+# Display all plots
+tagList(
+  lapply(seq_along(plot_list), function(i) {
+    div(
+      h3(unique(plots[[i]]$variable)),
+      plot_list[[i]]
+    )
+  })
+)
+
+```
+
+
+
+
+```{r questions_answers}
+
+
+questionTables<-main|> 
+  colnames()
+
+questionTables <- questionTables |> 
+  as.data.frame() |> 
+  slice(38:54) |> 
+  mutate(questionID = row_number()) |> 
+  rename(question = questionTables)
+
+
+answersTable<- main |> 
+  select(c(survey_number, date, time, any_of(questionTables$question)))
+
+answersLong <- answersTable |> 
+  pivot_longer(cols = -c(survey_number, time, date), names_to = "Question", values_to = "Answer") |> 
+  left_join(questionTables, by = c("Question" = "question")) |> 
+  mutate(Question = questionID) |> 
+  select(-questionID) |> 
+  rename( surveyNumber = survey_number, date = date, time = time, questionID = Question, answer = Answer) |> 
+  mutate(time = as.character(time))
+
+answersLong<- answersLong |> 
+  mutate(date = as.Date(date)) |> 
+  arrange(date) |> 
+  mutate(date_group = cumsum(date != lag(date, default = first(date)))) |> 
+  # group_by(date_group) |> 
+  # mutate(surveyNumber = row_number()) |>  
+  # ungroup() |> 
+  select(-date_group) |> 
+  mutate(date = as.character(date))
+
+
+answersLong <- answersLong |> 
+  mutate(date = as.character(date))
+
+```
+
+
+
+## Demography
+
+Plots for demography - there does not appear to be any columns of note that require attention here.
+
+```{r demo}
+
+demo_data <- sheets_combined$`Demographic Data`
+
+demo_long <- demo_data %>%
+  mutate(across(everything(), as.character)) %>%
+  pivot_longer(cols = everything(), names_to = "variable", values_to = "value") %>%
+  group_by(variable) %>%
+  group_split()
+
+# Track failures
+conversion_failures <- list()
+
+plot_list <- map(demo_long, function(df) {
+  df <- df %>%
+    mutate(value_numeric = suppressWarnings(as.numeric(value)))
+
+  # Identify failed entries (non-NA originally, but NA after conversion)
+  failed_entries <- df %>%
+    filter(!is.na(value) & is.na(value_numeric)) %>%
+    select(variable, value)
+
+  if (nrow(failed_entries) > 0) {
+    conversion_failures[[unique(df$variable)]] <<- failed_entries
+  }
+
+  # Determine if we treat as numeric for plotting
+  use_numeric <- sum(!is.na(df$value_numeric)) > 0.5 * nrow(df)
+
+  if (use_numeric) {
+    # Numeric line plot
+    plot_ly(
+      df,
+      x = ~seq_along(value_numeric),
+      y = ~value_numeric,
+      type = "scatter",
+      mode = "lines+markers",
+      name = unique(df$variable)
+    )
+  } else {
+    # Categorical count plot
+    df_count <- df %>% count(value)
+    plot_ly(
+      df_count,
+      x = ~value,
+      y = ~n,
+      type = "bar",
+      color = ~value
+    )
+  }
+})
+
+# Combine all failures into one table
+if (length(conversion_failures) > 0) {
+  failure_table <- bind_rows(conversion_failures, .id = "failed_variable")
+
+  # Paged DT table
+  dt_table <- DT::datatable(
+    failure_table,
+    options = list(
+      pageLength = 10,
+      autoWidth = TRUE
+    ),
+    caption = "Entries that failed numeric conversion"
+  )
+
+  # Print column names as a single string
+  cat("The column names that failed are:", 
+      paste(unique(failure_table$failed_variable), collapse = ", "), "\n")
+}
+
+# dt_table contains the interactive paged table
+dt_table
+
+
+```
+
+Exploration of the data:
+
+```{r plotly_creel, echo=FALSE, message=FALSE, warning=FALSE}
+
+tagList(
+  lapply(seq_along(plot_list), function(i) {
+    div(
+      h3(unique(demo_long[[i]]$variable)),
+      plot_list[[i]]
+    )
+  })
+)
+ 
+# # Build list of plots
+# plots <- demo_data |>
+#   mutate(across(-date, as.character)) |>
+#   pivot_longer(cols = -date, names_to = "variable", values_to = "value") |>
+#   group_by(variable) |>
+#   group_split()
+# 
+# plot_list <- map(plots, function(df) {
+#   df <- df |> 
+#     mutate(value_numeric = suppressWarnings(as.numeric(value)))
+# 
+#   use_numeric <- sum(!is.na(df$value_numeric)) > 0.5 * nrow(df)
+# 
+#   if (use_numeric) {
+#     # Plot numeric values over time
+#     plot_ly(
+#       df,
+#       x = ~date,
+#       y = ~value_numeric,
+#       type = "scatter",
+#       mode = "lines+markers",
+#       name = unique(df$variable)
+#     ) |>
+#       layout(
+#         title = list(text = unique(df$variable)),
+#         xaxis = list(title = "Date"),
+#         yaxis = list(title = "Value")
+#       )
+#   } else {
+#     # Plot count of each category per date
+#     df_count <- df |> count(date, value)
+# 
+#     plot_ly(
+#       df_count,
+#       x = ~date,
+#       y = ~n,
+#       type = "bar",
+#       color = ~value
+#     ) |>
+#       layout(
+#         title = list(text = unique(df$variable)),
+#         xaxis = list(title = "Date"),
+#         yaxis = list(title = "Count"),
+#         barmode = "stack"
+#       )
+#   }
+# })
+# 
+# # Display all plots
+# tagList(
+#   lapply(seq_along(plot_list), function(i) {
+#     div(
+#       h3(unique(plots[[i]]$variable)),
+#       plot_list[[i]]
+#     )
+#   })
+# )
+```
+
+## Fish data
+
+```{r load_fish} 
+# Filter out rows without date_time and create date/time columns
+fish <- sheets_combined$`Fish Data` %>%
+  mutate(temp = coalesce(pit_tag_number, p_it_tag_number)) %>%
+  # Remove the old columns
+  select(-pit_tag_number, -p_it_tag_number) %>%
+  # Rename the temp column to the standardized name
+  rename(pit_tag_number = temp) |>
+  filter(!is.na(date_time)) %>%
+  mutate(
+    date = as.Date(as.numeric(date_time), origin = "1899-12-30"),
+    time = hms::as_hms(as.numeric(date_time) %% 1 * 86400)
+  ) %>%
+  select(-date_time)
+
+# Convert all columns to character for uniform processing
+fish_long <- fish %>%
+  mutate(across(everything(), as.character)) %>%
+  pivot_longer(
+    cols = -c(date, time),       # keep date and time
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  group_by(variable) %>%
+  group_split()
+
+# Track conversion failures
+conversion_failures <- list()
+
+plot_list <- map(fish_long, function(df) {
+  df <- df %>%
+    mutate(value_numeric = suppressWarnings(as.numeric(value)))
+
+  # Identify entries that failed numeric conversion
+  failed_entries <- df %>%
+    filter(!is.na(value) & is.na(value_numeric)) %>%
+    select(variable, value, date, time)
+
+  if (nrow(failed_entries) > 0) {
+    conversion_failures[[unique(df$variable)]] <<- failed_entries
+  }
+
+  # Decide if numeric or categorical plot
+  use_numeric <- sum(!is.na(df$value_numeric)) > 0.5 * nrow(df)
+
+  if (use_numeric) {
+    # Numeric line plot
+    plot_ly(
+      df,
+      x = ~seq_along(value_numeric),
+      y = ~value_numeric,
+      type = "scatter",
+      mode = "lines+markers",
+      name = unique(df$variable)
+    )
+  } else {
+    # Categorical bar plot
+    df_count <- df %>% count(value)
+    plot_ly(
+      df_count,
+      x = ~value,
+      y = ~n,
+      type = "bar",
+      color = ~value
+    )
+  }
+})
+
+# Combine all failures into one table and display as paged DT
+if (length(conversion_failures) > 0) {
+  failure_table <- bind_rows(conversion_failures, .id = "failed_variable")
+
+  # Paged interactive table
+  dt_table <- DT::datatable(
+    failure_table,
+    options = list(pageLength = 10, autoWidth = TRUE),
+    caption = "Entries that failed numeric conversion"
+  )
+
+  # Print column names that failed
+  cat("The column names that failed are:", 
+      paste(unique(failure_table$failed_variable), collapse = ", "), "\n")
+  
+  dt_table  # Return the DT table so it displays
+}
+```
+
+```{r fish_plots}
+
+tagList(
+  lapply(seq_along(plot_list), function(i) {
+    div(
+      h3(unique(fish_long[[i]]$variable)),
+      plot_list[[i]]
+    )
+  })
+)
+# # Build list of plots
+# plots <- fish |>
+#   mutate(across(-date, as.character)) |>
+#   pivot_longer(cols = -date, names_to = "variable", values_to = "value") |>
+#   group_by(variable) |>
+#   group_split()
+# 
+# plot_list <- map(plots, function(df) {
+#   df <- df |> 
+#     mutate(value_numeric = suppressWarnings(as.numeric(value)))
+# 
+#   use_numeric <- sum(!is.na(df$value_numeric)) > 0.5 * nrow(df)
+# 
+#   if (use_numeric) {
+#     # Plot numeric values over time
+#     plot_ly(
+#       df,
+#       x = ~date,
+#       y = ~value_numeric,
+#       type = "scatter",
+#       mode = "lines+markers",
+#       name = unique(df$variable)
+#     ) |>
+#       layout(
+#         title = list(text = unique(df$variable)),
+#         xaxis = list(title = "Date"),
+#         yaxis = list(title = "Value")
+#       )
+#   } else {
+#     # Plot count of each category per date
+#     df_count <- df |> count(date, value)
+# 
+#     plot_ly(
+#       df_count,
+#       x = ~date,
+#       y = ~n,
+#       type = "bar",
+#       color = ~value
+#     ) |>
+#       layout(
+#         title = list(text = unique(df$variable)),
+#         xaxis = list(title = "Date"),
+#         yaxis = list(title = "Count"),
+#         barmode = "stack"
+#       )
+#   }
+# })
+# 
+# # Display all plots
+# tagList(
+#   lapply(seq_along(plot_list), function(i) {
+#     div(
+#       h3(unique(plots[[i]]$variable)),
+#       plot_list[[i]]
+#     )
+#   })
+# )
+
+```
+
+
+
+## ICE 
+```{r ice_data}
+
+ICE<- sheets_combined$ICE
+
+ICE_long <- ICE |> 
+  mutate(date = as.Date(as.numeric(date), origin = "1899-12-30")) |> 
+   # Combine the two columns into a temporary one
+  mutate(temp = coalesce(air_temp, air_temperature)) %>%
+  # Remove the old columns
+  select(-air_temp, -air_temperature) %>%
+  # Rename the temp column to the standardized name
+  rename(air_temperature = temp) |>
+  mutate(temp = coalesce(precip, precipitation)) %>%
+  # Remove the old columns
+  select(-precip, -precipitation) %>%
+  # Rename the temp column to the standardized name
+  rename(precipitation = temp) |>
+  mutate(across(everything(), as.character)) %>%
+  pivot_longer(
+    cols = -c(date, time),       # keep date and time
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  group_by(variable) %>%
+  group_split()
+
+# Track failures
+conversion_failures <- list()
+
+plot_list <- map(ICE_long, function(df) {
+  df <- df %>%
+    mutate(value_numeric = suppressWarnings(as.numeric(value)))
+
+  # Identify failed entries (non-NA originally, but NA after conversion)
+  failed_entries <- df %>%
+    filter(!is.na(value) & is.na(value_numeric)) %>%
+    select(variable, value, date) %>%  # Include date for context
+    head(50)  # optional: first 50 per variable if very large
+
+  if (nrow(failed_entries) > 0) {
+    conversion_failures[[unique(df$variable)]] <<- failed_entries
+  }
+
+  # Determine if we treat as numeric for plotting
+  use_numeric <- sum(!is.na(df$value_numeric)) > 0.5 * nrow(df)
+
+  if (use_numeric) {
+    # Numeric line plot
+    plot_ly(
+      df,
+      x = ~seq_along(value_numeric),
+      y = ~value_numeric,
+      type = "scatter",
+      mode = "lines+markers",
+      name = unique(df$variable)
+    )
+  } else {
+    # Categorical count plot
+    df_count <- df %>% count(value)
+    plot_ly(
+      df_count,
+      x = ~value,
+      y = ~n,
+      type = "bar",
+      color = ~value
+    )
+  }
+})
+
+# Combine all failures into one table
+if (length(conversion_failures) > 0) {
+  failure_table <- bind_rows(conversion_failures, .id = "failed_variable")
+
+  # Paged DT table
+  dt_table <- DT::datatable(
+    failure_table,
+    options = list(
+      pageLength = 10,
+      autoWidth = TRUE
+    ),
+    caption = "Entries that failed numeric conversion in ICE"
+  )
+
+  # Print column names as a single string
+  cat("The column names that failed are:", 
+      paste(unique(failure_table$failed_variable), collapse = ", "), "\n")
+}
+
+# dt_table contains the interactive paged table
+dt_table
+
+```
+
+```{r ice_plots}
+tagList(
+  lapply(seq_along(plot_list), function(i) {
+    div(
+      h3(unique(ICE_long[[i]]$variable)),
+      plot_list[[i]]
+    )
+  })
+)
+# # Build list of plots
+# # Convert date column to proper Date class if needed
+# ICE_no_dups <- ICE_no_dups |> 
+#   mutate(date = as.Date(date))  # If you want to keep it as Date
+# 
+# # Now pivot longer and split
+# plots <- ICE_no_dups |>
+#   mutate(across(!all_of("date"), as.character)) |>  # This avoids problems with column selection
+#   pivot_longer(cols = -date, names_to = "variable", values_to = "value") |>
+#   group_by(variable) |>
+#   group_split()
+# 
+# plot_list <- map(plots, function(df) {
+#   df <- df |> 
+#     mutate(value_numeric = suppressWarnings(as.numeric(value)))
+# 
+#   use_numeric <- sum(!is.na(df$value_numeric)) > 0.5 * nrow(df)
+# 
+#   if (use_numeric) {
+#     # Plot numeric values over time
+#     plot_ly(
+#       df,
+#       x = ~date,
+#       y = ~value_numeric,
+#       type = "scatter",
+#       mode = "lines+markers",
+#       name = unique(df$variable)
+#     ) |>
+#       layout(
+#         title = list(text = unique(df$variable)),
+#         xaxis = list(title = "Date"),
+#         yaxis = list(title = "Value")
+#       )
+#   } else {
+#     # Plot count of each category per date
+#     df_count <- df |> count(date, value)
+# 
+#     plot_ly(
+#       df_count,
+#       x = ~date,
+#       y = ~n,
+#       type = "bar",
+#       color = ~value
+#     ) |>
+#       layout(
+#         title = list(text = unique(df$variable)),
+#         xaxis = list(title = "Date"),
+#         yaxis = list(title = "Count"),
+#         barmode = "stack"
+#       )
+#   }
+# })
+# # Display all plots
+# tagList(
+#   lapply(seq_along(plot_list), function(i) {
+#     div(
+#       h3(unique(plots[[i]]$variable)),
+#       plot_list[[i]]
+#     )
+#   })
+# )
+
+```
+
+
