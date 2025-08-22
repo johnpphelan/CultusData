@@ -132,6 +132,39 @@ main<-main |>
 main_t <- main |> 
   select(-Date_2)
 
+
+sum(as.numeric(main_t$totalFishCaught), na.rm = T) 
+counted<- main_t |>
+  summarise(across(
+    .cols = c(matches("^no.*[cr]$"), any_of(c("totalFishCaught", "totalRetained"))),
+    .fns = ~ sum(as.numeric(.x), na.rm = TRUE)
+  ))|> 
+  as.tibble()
+#save counted as csv
+write.csv(counted, file = "output/counts_survey2024.csv", row.names = FALSE)
+
+sum_numbers_in_text <- function(x) {
+  nums <- str_extract_all(x, "\\d+")         # extract all numbers
+  sapply(nums, function(n) sum(as.numeric(n)))  # sum per element
+}
+
+# Apply to main_t
+main_t_totals <- main_t |>
+  mutate(
+    noOtherSppC_num = sum_numbers_in_text(noOtherSppC),
+    noOtherSppR_num = sum_numbers_in_text(noOtherSppR)
+  ) |>
+  summarise(across(
+    .cols = c(matches("^no.*[cr]$"), any_of(c("totalFishCaught", "totalRetained", "noOtherSppC_num", "noOtherSppR_num"))),
+    .fns = ~ sum(as.numeric(.x), na.rm = TRUE)
+  ))
+
+# Optional: tidy view
+main_t_totals_long <- main_t_totals |>
+  pivot_longer(everything(), names_to = "metric", values_to = "total")
+
+write.csv(main_t_totals, file = "output/counts_survey2024.csv", row.names = FALSE)
+
 dbAppendTable(con, "creelMain", main_t)
 
 ###########################################################################################
