@@ -51,14 +51,6 @@ files_read_l <- the_files |>
         # read everything as text
         dat_text <- readxl::read_excel(x, sheet = .x, col_types = "text")
         
-        # read again with guessing
-        dat_guess <- readxl::read_excel(x, sheet = .x)
-        
-        # if surveyor exists in the guessed version, replace it
-        if ("Surveyor" %in% names(dat_guess)) {
-          dat_text$Surveyor <- dat_guess$Surveyor
-        }
-        
         # rename special columns as you had before
         names(dat_text)[names(dat_text) == "# SMB c...15"] <- "# SMB c"
         names(dat_text)[names(dat_text) == "# SMB c...23"] <- "# SMB r"
@@ -74,9 +66,6 @@ files_read_f <- list_flatten(files_read_l)
 
 sheets_combined <- sheet_names |> 
   map(~ {
-    if ("surveyor" %in% names(.x)) {
-      .x$surveyor <- as.character(.x$surveyor)
-    }
     files_read_f[which(names(files_read_f) == .x)] |> 
       bind_rows()
   })
@@ -88,13 +77,13 @@ main <- sheets_combined$`Main Data`
 # main page contains the same survey number and date - we should only keep one when this combo is the same
 
 # Cleaning main data
-main_test <- main |> 
+main <- main |> 
   mutate(date = as.Date(as.numeric(date), origin = "1899-12-30")) |> 
   group_by(survey_number, date, time) |>
   fill(everything(), .direction = "downup") |>  # fill missing values in group
   slice_head(n = 1) |>                          # keep just the first row
-  ungroup()
-  mutate(date = as.character(date))
+  ungroup() |> 
+  mutate(date = as.character(date)) |> 
   arrange(date) |> 
   group_by(as.character(date)) |> 
   mutate(survey_number = row_number()) |>  
@@ -157,10 +146,9 @@ main <- main |>
 main <- main |> 
   mutate(
     air_temp = coalesce(air_temp, air_temperature, mean_air_temperature),
-    surveyor = coalesce(surveyor, x2),
     wind = coalesce(wind, x44)
   ) |> 
-  select(-c(air_temperature, x2, x44))
+  select(-c(air_temperature, x44))
 
 main_page <- main[,1:37]
 
@@ -180,7 +168,7 @@ main_page<- main_page |>
 
 ## Main Data Table
 
-Comparison of fish reported by year
+Comparison of fish reported by year. "C" is the fish caught, and "R" are those that were retained.
 
 ```{r fish_caught}
 counted <- main_page |>
@@ -191,7 +179,18 @@ counted <- main_page |>
     .fns = ~ sum(as.numeric(.x), na.rm = TRUE),
     .names = "sum_{.col}"
   )) |> 
+  rename_with(
+    ~ str_remove_all(.x, "^sum_|^number_|^total_"),
+    .cols = -year
+  ) |> 
   as_tibble()
+
+counted <- counted |>
+  rename_with(
+    ~ str_remove_all(.x, "^sum_|^number_|^total_"),
+    .cols = -year
+)
+
 
 main_t_totals_long <- counted |>
   pivot_longer(
@@ -200,14 +199,15 @@ main_t_totals_long <- counted |>
     values_to = "total"
   )
 
+
+
 library(ggplot2)
 ggplot(main_t_totals_long, aes(x = metric, y = total, fill = factor(year))) +
   geom_col(position = position_dodge(width = 0.8)) +
   labs(
-    x = "Metric",
+    x = "Species, Caught and Retained",
     y = "Total Count",
-    fill = "Year",
-    title = "Total Counts by Metric and Year"
+    fill = "Year"
   ) +
   theme_minimal() +
   theme(
@@ -282,15 +282,20 @@ knitr::kable(fishing_effort, caption = "Fishing Effort by Year", digits = 2)
 
 ## Main Table - Plots
 
-These are all plots that could be easily completed - subject to how columns are structured. If there are mixes of letters and numbers, we will not be able to conver that to numeric. The following are plots of what data was converted, which can be used to check for any erroneous data entries.
+These are all plots that could be easily completed - subject to how columns are structured. If there are mixes of letters and numbers, we will not be able to convert that to numeric. The following are plots of what data was converted, which can be used to check for any erroneous data entries.
 
 
 
 ```{r main_plots}
 
+to_remove_from_plots<-c("survey_number", "time", "shift", "release_reason", "hours_worked", "shift_start", "shift_end" , "shift_start_time", "shift_end_time")
+
 conversion_failures <- list()
 
+
+
 plots <- main_page |>
+  select(-all_of(to_remove_from_plots)) |> 
   mutate(across(-date, as.character)) |>
   pivot_longer(cols = -date, names_to = "variable", values_to = "value") |>
   group_by(variable) |>
