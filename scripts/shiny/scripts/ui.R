@@ -18,8 +18,8 @@ table_col_search <- sort(table_col_search)
 template_list<-c("Abundance estiamte" = "", "angling Basok and Buck", "Angling Derby", "High Reward Tags", "High Reward Tags Claimed",
                  "Nest Data", "scale 500", "Scale Aging", "Spring Marking", "Sweltzer Creek", "Tag Data", "Scale Column Name Key")
 
-
-source("scripts/f_metadata.R")
+library(here)
+source(here("scripts/f_metadata.R"))
 
 #basic theme
 my_theme <- bslib::bs_theme(
