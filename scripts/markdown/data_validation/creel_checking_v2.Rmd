@@ -150,7 +150,10 @@ main <- main |>
     air_temp = coalesce(air_temp, air_temperature, mean_air_temperature),
     wind = coalesce(wind, x44)
   ) |> 
-  select(-c(air_temperature, x44))
+  select(-c(air_temperature, x44)) 
+
+main <- main |> 
+  dplyr::distinct()
 
 main_page <- main[,1:37]
 
@@ -164,7 +167,10 @@ main_page <- main_page |>
   filter(!is.na(date))
 
 main_page<- main_page |> 
-  relocate(shift_end:hours_worked, .after = everything())
+  relocate(shift_end:hours_worked, .after = everything()) |> 
+  
+  
+  
 
 ```
 
@@ -530,6 +536,19 @@ ggplot(age_summary, aes(x = age_class, y = n, fill = age_class)) +
 
 demo_data <- demo_data %>%
   mutate(
+    # make sure 'time' is numeric (Excel serial)
+    time_num = as.numeric(date_time),
+    
+    # convert Excel serial to POSIXct in PST
+    datetime = as.POSIXct(time_num * 86400, origin = "1899-12-30", tz = "UTC"),
+    
+    # extract date and time separately
+    date = as.Date(datetime),
+    time = format(datetime, "%H:%M:%S")
+  ) |>
+  distinct(date, time, .keep_all = TRUE) |>
+  select(-datetime, -time_num, -date_time) |> 
+  mutate(
     # Normalize to uppercase and trim spaces
     city_prov_country = str_to_upper(str_trim(city_prov_country)),
     
@@ -596,7 +615,8 @@ demo_data <- demo_data %>%
       str_detect(city_prov_country, "Canada") ~ "Other Canada",
       TRUE ~ "International"
     )
-  )
+  ) |> 
+  dplyr::distinct()
 
 
 ### Locations from inside BC
@@ -703,7 +723,8 @@ fish <- sheets_combined$`Fish Data` %>%
     date = as.Date(as.numeric(date_time), origin = "1899-12-30"),
     time = hms::as_hms(as.numeric(date_time) %% 1 * 86400)
   ) %>%
-  select(-date_time)
+  select(-date_time) |> 
+  dplyr::distinct() # are the rows distint?
 
 fish = fish |> 
   mutate(spp = case_when(spp %in% c("Lrg Scl Suckr", "Lrg Scale Suckr") ~ "Large Scale Sucker",
@@ -751,8 +772,20 @@ ggplotly(p, tooltip = "text")
 
 ICE<- sheets_combined$ICE
 
-ICE_long <- ICE |> 
-  mutate(date = as.Date(as.numeric(date), origin = "1899-12-30")) |> 
+ICE<- ICE |>
+  mutate(
+    # make sure 'time' is numeric (Excel serial)
+    time_num = as.numeric(time),
+    
+    # convert Excel serial to POSIXct in PST
+    datetime = as.POSIXct(time_num * 86400, origin = "1899-12-30", tz = "UTC"),
+    
+    # extract date and time separately
+    date = as.Date(datetime),
+    time = format(datetime, "%H:%M:%S")
+  ) |>
+  distinct(date, time, .keep_all = TRUE) |>
+  select(-datetime, -time_num) |> 
    # Combine the two columns into a temporary one
   mutate(temp = coalesce(air_temp, air_temperature)) %>%
   # Remove the old columns
@@ -764,7 +797,10 @@ ICE_long <- ICE |>
   select(-precip, -precipitation) %>%
   # Rename the temp column to the standardized name
   rename(precipitation = temp) |>
-  mutate(across(everything(), as.character)) %>%
+  mutate(across(everything(), as.character))
+
+
+ICE_long = ICE %>%
   pivot_longer(
     cols = -c(date, time),       # keep date and time
     names_to = "variable",
@@ -896,3 +932,25 @@ plots$number_angling_boats$`2024`
 plots$number_angling_boats$`2025`
 
 ```
+
+
+```{r write_to_excel}
+
+library(writexl)
+
+# Prepare a named list of cleaned sheets
+sheets_to_save <- list(
+  "Main Data" = main_page,
+  "Demographic Data" = demo_data,
+  "Fish Data" = fish,
+  "ICE" = ICE
+)
+
+# Save to new Excel file
+write_xlsx(
+  sheets_to_save,
+  path = "./output/cleaned_creel_all_years.xlsx"
+)
+
+```
+
