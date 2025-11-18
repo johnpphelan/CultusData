@@ -21,7 +21,7 @@ column_names
 dbClearResult(result)
 
 
-query <- "SELECT * FROM tagEvent"
+query <- "SELECT * FROM creelFish"
 dbExecute(con = con, query)
 #querydelete<-"DROP TABLE surveyData"
 result <- dbSendQuery(conn = con, query)
