@@ -10,6 +10,11 @@ db_filepath = "output/CultusData.sqlite"
 
 con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 
+
+tag_data<- read.csv()
+
+
+
 names_fix(names(tag_data23))
 names(tag_data23)<-remove_special_chars(names(tag_data23))
 
