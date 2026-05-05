@@ -13,7 +13,7 @@ con<-dbConnect(RSQLite::SQLite(), db_filepath,extended_types = TRUE)
 # 
 # shore_temps<-read_xlsx(paste0(lan_folder, "2025 Projects/Temperature/CultusShoreTemps(SMB).xlsx"))
 
-shore_temps<-read_xlsx(paste0("data/CultusShoreTemps(SMB).xlsx"))
+shore_temps<-read_xlsx(paste0("data/temperature/CultusShoreTemps(SMB).xlsx"))
 
 location<-as.character(colnames(shore_temps[1]))
 
