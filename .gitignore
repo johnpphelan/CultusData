@@ -42,3 +42,4 @@ scripts/shiny/www/**
 *.sqlite
 data
 images
+.positai
